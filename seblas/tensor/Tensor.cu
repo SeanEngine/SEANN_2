@@ -5,41 +5,105 @@
 #include "Tensor.cuh"
 #define toFloat4R(ptr) (reinterpret_cast<float4*>(&(ptr))[0])
 #define CUDA_BLOCK_SIZE_1D CUDA_BLOCK_SIZE.x * CUDA_BLOCK_SIZE.y
-#define topOff(a,b) (a + b - 1)/(b)
+#define topOff(a,b) ((a) + (b) - 1)/(b)
 
 
 namespace seblas {
 
     //CPU operators
     void addTensorCPU(const int tid, const int ts, Tensor* A, Tensor* B){
-        int start = ts * (int)(A->dims.size/tid);
-        int end = ts == tid-1 ? (int)A->dims.size : start + (int)A->dims.size/tid;
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
         for(int i = start; i < end; i++){
             A->elements[i] += B->elements[i];
         }
     }
 
     void minusTensorCPU(const int tid, const int ts, Tensor* A, Tensor* B){
-        int start = ts * (int)(A->dims.size/tid);
-        int end = ts == tid-1 ? (int)A->dims.size : start + (int)A->dims.size/tid;
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
         for(int i = start; i < end; i++){
             A->elements[i] -= B->elements[i];
         }
     }
 
     void hadamardTensorCPU(const int tid, const int ts, Tensor* A, Tensor* B){
-        int start = ts * (int)(A->dims.size/tid);
-        int end = ts == tid-1 ? (int)A->dims.size : start + (int)A->dims.size/tid;
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
         for(int i = start; i < end; i++){
             A->elements[i] *= B->elements[i];
         }
     }
 
     void divideTensorCPU(const int tid, const int ts, Tensor* A, Tensor* B){
-        int start = ts * (int)(A->dims.size/tid);
-        int end = ts == tid-1 ? (int)A->dims.size : start + (int)A->dims.size/tid;
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
         for(int i = start; i < end; i++){
             A->elements[i] /= B->elements[i];
+        }
+    }
+
+    void addScalarCPU(const int tid, const int ts, Tensor* A, float b){
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
+        for(int i = start; i < end; i++){
+            A->elements[i] += b;
+        }
+    }
+
+    void minusScalarCPU(const int tid, const int ts, Tensor* A, float b){
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
+        for(int i = start; i < end; i++){
+            A->elements[i] -= b;
+        }
+    }
+
+    void hadamardScalarCPU(const int tid, const int ts, Tensor* A, float b){
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
+        for(int i = start; i < end; i++){
+            A->elements[i] *= b;
+        }
+    }
+
+    void divideScalarCPU(const int tid, const int ts, Tensor* A, float b){
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
+        for(int i = start; i < end; i++){
+            A->elements[i] /= b;
+        }
+    }
+
+    void constFillCPU(const int tid, const int ts, Tensor* A, float value){
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
+        for(int i = start; i < end; i++){
+            A->elements[i] = value;
+        }
+    }
+
+    void randUniformCPU(const int tid, const int ts, Tensor* A, float min, float max){
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
+        uint32 seed = chrono::steady_clock::now().time_since_epoch().count();
+        default_random_engine e(seed);
+        uniform_real_distribution<float> distr(min, max);
+        for(int i = start; i < end; i++){
+            srand(time(nullptr) * i);
+            A->elements[i] = distr(e);
+        }
+    }
+
+    void randNormalCPU(const int tid, const int ts, Tensor* A, float mean, float stddev){
+        int start = tid * (int)(A->dims.size/ts);
+        int end = tid == ts-1 ? (int)A->dims.size : start + (int)A->dims.size/ts;
+        uint32 seed = chrono::steady_clock::now().time_since_epoch().count();
+        default_random_engine e(seed);
+        normal_distribution<float> distr(mean, stddev);
+        for(int i = start; i < end; i++){
+            srand(time(nullptr) * i);
+            A->elements[i] = distr(e);
         }
     }
 
@@ -136,6 +200,127 @@ namespace seblas {
         }
     }
 
+    __global__ void addScalarD(Tensor* in, float scalar){
+        uint32 index = threadIdx.x + blockIdx.x * blockDim.x;
+        if(index < in->dims.size){
+            in->elements[index] += scalar;
+        }
+    }
+
+    __global__ void addScalar4D(Tensor* in, float scalar){
+        uint32 index = (threadIdx.x + blockIdx.x * blockDim.x )* 4;
+        float regisA[4];
+        float regisC[4] = {0};
+        if(index < in->dims.size){
+            toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
+            #pragma unroll
+            for (int i = 0; i < 4; i++){
+                regisC[i] = regisA[i] + scalar;
+            }
+            toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
+        }
+    }
+
+    __global__ void minusScalarD(Tensor* in, float scalar){
+        uint32 index = threadIdx.x + blockIdx.x * blockDim.x;
+        if(index < in->dims.size){
+            in->elements[index] -= scalar;
+        }
+    }
+
+    __global__ void minusScalar4D(Tensor* in, float scalar){
+        uint32 index = (threadIdx.x + blockIdx.x * blockDim.x )* 4;
+        float regisA[4];
+        float regisC[4] = {0};
+        if(index < in->dims.size){
+            toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
+            #pragma unroll
+            for (int i = 0; i < 4; i++){
+                regisC[i] = regisA[i] - scalar;
+            }
+            toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
+        }
+    }
+
+    __global__ void hadamardScalarD(Tensor* in, float scalar){
+        uint32 index = threadIdx.x + blockIdx.x * blockDim.x;
+        if(index < in->dims.size){
+            in->elements[index] *= scalar;
+        }
+    }
+
+    __global__ void hadamardScalar4D(Tensor* in, float scalar){
+        uint32 index = (threadIdx.x + blockIdx.x * blockDim.x )* 4;
+        float regisA[4];
+        float regisC[4] = {0};
+        if(index < in->dims.size){
+            toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
+            #pragma unroll
+            for (int i = 0; i < 4; i++){
+                regisC[i] = regisA[i] * scalar;
+            }
+            toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
+        }
+    }
+
+    __global__ void divideScalarD(Tensor* in, float scalar){
+        uint32 index = threadIdx.x + blockIdx.x * blockDim.x;
+        if(index < in->dims.size){
+            in->elements[index] /= scalar;
+        }
+    }
+
+    __global__ void divideScalar4D(Tensor* in, float scalar){
+        uint32 index = (threadIdx.x + blockIdx.x * blockDim.x )* 4;
+        float regisA[4];
+        float regisC[4] = {0};
+        if(index < in->dims.size){
+            toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
+            #pragma unroll
+            for (int i = 0; i < 4; i++){
+                regisC[i] = regisA[i] / scalar;
+            }
+            toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
+        }
+    }
+
+    __global__ void constFillD(Tensor* A, float value){
+        uint32 index = threadIdx.x + blockIdx.x * blockDim.x;
+        if(index < A->dims.size){
+            A->elements[index] = value;
+        }
+    }
+
+    __global__ void constFill4D(Tensor* A, float value){
+        uint32 index = (threadIdx.x + blockIdx.x * blockDim.x )* 4;
+        float regisA[4];
+        if(index < A->dims.size){
+            #pragma unroll
+            for (float & i : regisA){
+                i = value;
+            }
+            toFloat4R(A->elements[index]) = toFloat4R(regisA[0]);
+        }
+    }
+
+    __global__ void randUniformD(Tensor* A, long seed, float min, float max){
+        uint32 id = (threadIdx.x + blockIdx.x * blockDim.x);
+        if(id >= A->dims.size) return;
+        curandStateXORWOW_t state;
+        curand_init(id * seed, 0, 0, &state);
+        float val = curand_uniform(&state);
+        A->elements[id] = val * (max - min) + min;
+    }
+
+    __global__ void randNormalD(Tensor* A, long seed, float mean, float stddev){
+        uint32 id = (threadIdx.x + blockIdx.x * blockDim.x);
+        if(id >= A->dims.size) return;
+        curandStateXORWOW_t state;
+        curand_init(id * seed, 0, 0, &state);
+        float val = curand_normal(&state);
+        A->elements[id] = val * stddev + mean;
+    }
+
     //index operators
     __device__ __host__ seblas::index4 seblas::index4::operator+(seblas::index4 other) const {
         return {n + other.n, c + other.c, h + other.h, w + other.w};
@@ -191,11 +376,27 @@ namespace seblas {
         return this;
     }
 
+    void Tensor::eliminate() {
+        destroy();
+        cudaFreeHost(this);
+    }
+
+    void Tensor::eliminateHost() {
+        destroyHost();
+        cudaFree(this);
+    }
+
     Tensor *Tensor::toDevice() {
         auto* output = Tensor::declare(dims)->create();
         copyH2D(output);
         destroyHost();
         cudaFreeHost(this);
+        return output;
+    }
+
+    Tensor *Tensor::ripOffDevice() const {
+        auto* output = Tensor::declare(dims)->createHost();
+        copyD2H(output);
         return output;
     }
 
@@ -336,6 +537,139 @@ namespace seblas {
         uint32 grid = topOff(dims.size, CUDA_BLOCK_SIZE_1D);
         uint32 block = CUDA_BLOCK_SIZE_1D;
         divideD<<<grid, block>>>(this, other);
+        assertCuda(__FILE__, __LINE__);
+        return this;
+    }
+
+    Tensor *Tensor::operator+(float other){
+        if(deviceId == -1){
+            _alloc<CPU_THREADS>(addScalarCPU, this, other);
+            return this;
+        }
+
+        if(dims.size % 4 == 0){
+            uint32 grid = topOff(dims.size/4, CUDA_BLOCK_SIZE_1D);
+            uint32 block = CUDA_BLOCK_SIZE_1D;
+            addScalar4D<<<grid, block>>>(this, other);
+            assertCuda(__FILE__, __LINE__);
+            return this;
+        }
+
+        uint32 grid = topOff(dims.size, CUDA_BLOCK_SIZE_1D);
+        uint32 block = CUDA_BLOCK_SIZE_1D;
+        addScalarD<<<grid, block>>>(this, other);
+        assertCuda(__FILE__, __LINE__);
+        return this;
+    }
+
+    Tensor *Tensor::operator-(float other){
+        if(deviceId == -1){
+            _alloc<CPU_THREADS>(minusScalarCPU, this, other);
+            return this;
+        }
+
+        if(dims.size % 4 == 0){
+            uint32 grid = topOff(dims.size/4, CUDA_BLOCK_SIZE_1D);
+            uint32 block = CUDA_BLOCK_SIZE_1D;
+            minusScalar4D<<<grid, block>>>(this, other);
+            assertCuda(__FILE__, __LINE__);
+            return this;
+        }
+
+        uint32 grid = topOff(dims.size, CUDA_BLOCK_SIZE_1D);
+        uint32 block = CUDA_BLOCK_SIZE_1D;
+        minusScalarD<<<grid, block>>>(this, other);
+        assertCuda(__FILE__, __LINE__);
+        return this;
+    }
+
+    Tensor *Tensor::operator*(float other){
+        if(deviceId == -1){
+            _alloc<CPU_THREADS>(hadamardScalarCPU, this, other);
+            return this;
+        }
+
+        if(dims.size % 4 == 0){
+            uint32 grid = topOff(dims.size/4, CUDA_BLOCK_SIZE_1D);
+            uint32 block = CUDA_BLOCK_SIZE_1D;
+            hadamardScalar4D<<<grid, block>>>(this, other);
+            assertCuda(__FILE__, __LINE__);
+            return this;
+        }
+
+        uint32 grid = topOff(dims.size, CUDA_BLOCK_SIZE_1D);
+        uint32 block = CUDA_BLOCK_SIZE_1D;
+        hadamardScalarD<<<grid, block>>>(this, other);
+        assertCuda(__FILE__, __LINE__);
+        return this;
+    }
+
+    Tensor *Tensor::operator/(float other){
+        if(deviceId == -1){
+            _alloc<CPU_THREADS>(divideScalarCPU, this, other);
+            return this;
+        }
+
+        if(dims.size % 4 == 0){
+            uint32 grid = topOff(dims.size/4, CUDA_BLOCK_SIZE_1D);
+            uint32 block = CUDA_BLOCK_SIZE_1D;
+            divideScalar4D<<<grid, block>>>(this, other);
+            assertCuda(__FILE__, __LINE__);
+            return this;
+        }
+
+        uint32 grid = topOff(dims.size, CUDA_BLOCK_SIZE_1D);
+        uint32 block = CUDA_BLOCK_SIZE_1D;
+        divideScalarD<<<grid, block>>>(this, other);
+        assertCuda(__FILE__, __LINE__);
+        return this;
+    }
+
+    Tensor* Tensor::constFill(float val){
+        if(deviceId == -1){
+            _alloc<CPU_THREADS>(constFillCPU, this, val);
+            return this;
+        }
+
+        if(dims.size % 4 == 0){
+            uint32 grid = topOff(dims.size/4, CUDA_BLOCK_SIZE_1D);
+            uint32 block = CUDA_BLOCK_SIZE_1D;
+            constFill4D<<<grid, block>>>(this, val);
+            assertCuda(__FILE__, __LINE__);
+            return this;
+        }
+
+        uint32 grid = topOff(dims.size, CUDA_BLOCK_SIZE_1D);
+        uint32 block = CUDA_BLOCK_SIZE_1D;
+        constFillD<<<grid, block>>>(this, val);
+        assertCuda(__FILE__, __LINE__);
+        return this;
+    }
+
+    Tensor* Tensor::randUniform(float min, float max) {
+        if(deviceId == -1){
+            _alloc<CPU_THREADS>(randUniformCPU, this, min, max);
+            return this;
+        }
+
+        uint32 grid = topOff(dims.size, CUDA_BLOCK_SIZE_1D);
+        uint32 block = CUDA_BLOCK_SIZE_1D;
+        long seed = (long)chrono::system_clock::now().time_since_epoch().count();
+        randUniformD<<<grid, block>>>(this, seed, min, max);
+        assertCuda(__FILE__, __LINE__);
+        return this;
+    }
+
+    Tensor* Tensor::randNormal(float mean, float stddev) {
+        if(deviceId == -1){
+            _alloc<CPU_THREADS>(randNormalCPU, this, mean, stddev);
+            return this;
+        }
+
+        uint32 grid = topOff(dims.size, CUDA_BLOCK_SIZE_1D);
+        uint32 block = CUDA_BLOCK_SIZE_1D;
+        long seed = (long)chrono::system_clock::now().time_since_epoch().count();
+        randNormalD<<<grid, block>>>(this, seed, mean, stddev);
         assertCuda(__FILE__, __LINE__);
         return this;
     }

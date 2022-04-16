@@ -8,8 +8,13 @@
 #include "cuda.h"
 #include "cuda_runtime.h"
 #include "mma.h"
+#include "curand.h"
+#include <curand_kernel.h>
+
 #include <string>
 #include <cassert>
+#include <random>
+
 #include "../assist/CudaAssert.cuh"
 #include "../../seutil/exec/ThreadController.cuh"
 
@@ -93,14 +98,18 @@ namespace seblas{
         //create and destruct tensor elements
         Tensor* create();
         Tensor* destroy();
+        void eliminate();
         Tensor* createHost();
         Tensor* destroyHost();
+        void eliminateHost();
 
         //transLocate
         //toDevice() and toHost() will migrate the elements
         //the original tensor would be unregistered
+        //ripoff() creates an identical tensor on host as it is on device
         Tensor* toDevice();
         Tensor* toHost();
+        Tensor* ripOffDevice() const;
         Tensor* copyH2D(Tensor* onDevice) const;
         Tensor* copyD2H(Tensor* onHost) const;
         Tensor* copyD2D(Tensor* onDevice) const;
@@ -112,9 +121,18 @@ namespace seblas{
 
         //common operators
         Tensor* operator+(Tensor* other);
+        Tensor* operator+(float other);
         Tensor* operator-(Tensor* other);
+        Tensor* operator-(float other);
         Tensor* operator*(Tensor* other);  //hadamard product
+        Tensor* operator*(float other);
         Tensor* operator/(Tensor* other);
+        Tensor* operator/(float other);
+
+        //initialization
+        Tensor* constFill(float val);
+        Tensor* randUniform(float min, float max);
+        Tensor* randNormal(float mean, float stddev);
     };
 }
 
