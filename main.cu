@@ -1,6 +1,9 @@
 #include <iostream>
+#include "seblas/tensor/Tensor.cuh"
+#include <vector>
+
+using namespace seblas;
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
-    return 0;
+    Tensor* t = Tensor::declare(3,15)->createHost()->toDevice();
 }
