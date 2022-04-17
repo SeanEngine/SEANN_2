@@ -109,7 +109,7 @@ namespace seblas{
         //ripoff() creates an identical tensor on host as it is on device
         Tensor* toDevice();
         Tensor* toHost();
-        Tensor* ripOffDevice() const;
+        [[nodiscard]] Tensor* ripOffDevice() const;
         Tensor* copyH2D(Tensor* onDevice) const;
         Tensor* copyD2H(Tensor* onHost) const;
         Tensor* copyD2D(Tensor* onDevice) const;
