@@ -15,6 +15,9 @@ namespace seblas {
 
     //assert strict dimension relationship
     void assertInRangeStrict(Tensor* A, Tensor* B);
+
+    //assert dimensions for convolution operations
+    void assertConv(Tensor* A, Tensor* B, Tensor* C,uint32 strideH, uint32 strideW, uint32 padH, uint32 padW);
 }
 
 

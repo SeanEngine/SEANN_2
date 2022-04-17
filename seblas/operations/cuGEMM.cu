@@ -1550,7 +1550,7 @@ namespace seblas{
         return C;
     }
 
-//gemm with the first matrix automatically transposed
+    //gemm with the first matrix automatically transposed
     Tensor* sgemmTN(Tensor *A, Tensor *B, Tensor *C) {
         assert(A->dims.h == B->dims.h);
         assert(A->dims.w == C->dims.h && B->dims.w == C->dims.w);
@@ -1568,7 +1568,7 @@ namespace seblas{
         return C;
     }
 
-//gemm with the second matrix transposed
+    //gemm with the second matrix transposed
     Tensor* sgemmNT(Tensor *A, Tensor *B, Tensor *C) {
         assert(A->dims.w == B->dims.w);
         assert(A->dims.h == C->dims.h && B->dims.h == C->dims.w);
