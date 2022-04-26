@@ -76,6 +76,7 @@ namespace seblas{
      * Tensor is the base of everything,
      * it records the dimensions and a pointer to data elements
      * Tensor supports FP32 and TF32 as data types
+     * device id : -1 for CPU, others for GPU
      */
     class Tensor {
     public:
@@ -110,6 +111,7 @@ namespace seblas{
         Tensor* toDevice();
         Tensor* toHost();
         [[nodiscard]] Tensor* ripOffDevice() const;
+        [[nodiscard]] Tensor* ripOffHost() const;
         Tensor* copyH2D(Tensor* onDevice) const;
         Tensor* copyD2H(Tensor* onHost) const;
         Tensor* copyD2D(Tensor* onDevice) const;

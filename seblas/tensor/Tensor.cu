@@ -383,7 +383,7 @@ namespace seblas {
 
     void Tensor::eliminateHost() {
         destroyHost();
-        cudaFree(this);
+        cudaFreeHost(this);
     }
 
     Tensor *Tensor::toDevice() {
@@ -397,6 +397,14 @@ namespace seblas {
     Tensor *Tensor::ripOffDevice() const {
         auto* output = Tensor::declare(dims)->createHost();
         copyD2H(output);
+        assertCuda(__FILE__, __LINE__);
+        return output;
+    }
+
+    Tensor *Tensor::ripOffHost() const {
+        auto* output = Tensor::declare(dims)->create();
+        copyH2D(output);
+        assertCuda(__FILE__, __LINE__);
         return output;
     }
 

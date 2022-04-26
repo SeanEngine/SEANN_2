@@ -19,24 +19,28 @@ namespace seblas{
        }
     }
 
-    void assertConv(Tensor* A, Tensor* B, Tensor* C, uint32 strideH, uint32 strideW, uint32 padH, uint32 padW){
-        if(C->dims.h != (B->dims.h - A->dims.h + 2 * padH) / strideH + 1){
+    void assertConv(Tensor* filters, Tensor* features, Tensor* featureOut, uint32 strideH, uint32 strideW, uint32 padH, uint32 padW){
+        if(featureOut->dims.h != (features->dims.h - filters->dims.h + 2 * padH) / strideH + 1){
             logFatal(seio::LOG_SEG_SEBLAS, "Tensor assert failed:");
+            logFatal(seio::LOG_SEG_SEBLAS, "assertConv: rows (h) relationship did not satisfy");
             throw std::invalid_argument("assertConv: rows (h) relationship did not satisfy");
         }
 
-        if(C->dims.w != (B->dims.w - A->dims.w + 2 * padW) / strideW + 1){
+        if(featureOut->dims.w != (features->dims.w - filters->dims.w + 2 * padW) / strideW + 1){
             logFatal(seio::LOG_SEG_SEBLAS, "Tensor assert failed:");
+            logFatal(seio::LOG_SEG_SEBLAS, "assertConv: cols (w) relationship did not satisfy");
             throw std::invalid_argument("assertConv: cols (w) relationship did not satisfy");
         }
 
-        if(C->dims.c != A->dims.n || B->dims.c != A->dims.c){
+        if(featureOut->dims.c != filters->dims.n || features->dims.c != filters->dims.c){
             logFatal(seio::LOG_SEG_SEBLAS, "Tensor assert failed:");
+            logFatal(seio::LOG_SEG_SEBLAS, "assertConv: channels (c) relationship did not satisfy");
             throw std::invalid_argument("assertConv: channels relationship did not satisfy");
         }
 
-        if(C->dims.n != B->dims.n){
+        if(featureOut->dims.n != features->dims.n){
             logFatal(seio::LOG_SEG_SEBLAS, "Tensor assert failed:");
+            logFatal(seio::LOG_SEG_SEBLAS, "assertConv: batch (n) relationship did not satisfy");
             throw std::invalid_argument("assertConv: batch relationship did not satisfy");
         }
     }
