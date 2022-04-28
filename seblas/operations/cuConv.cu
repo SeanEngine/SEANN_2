@@ -312,8 +312,8 @@ namespace seblas{
 
         #pragma unroll
         for(int i=0; i<BLOCK_M; i+= readRowStrideA){
-            int colIndex = readColA / (FH * FW) + (FH * FW - 1) - (readColA % (FH * FW));
-            if(blockM + readRowA + i < M && readColA < K){
+            int colIndex = (readColA / (FH * FW)) * (FH * FW) + (FH * FW - 1) - (readColA % (FH * FW));
+            if(blockM + readRowA + i < M && colIndex < K && readColA < K){
                 //rotate 180 degrees
                 tileA[0][readColA][readRowA+i] = ptrA[(readRowA + i)*K + colIndex];
             }
@@ -364,8 +364,8 @@ namespace seblas{
                 #pragma unroll
                 for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
                     int loadIndex = i / readRowStrideA;
-                    int colIndex = (readColA + nextTileID) / (FH * FW) + (FH * FW - 1) - ((readColA + nextTileID) % (FH * FW));
-                    bufferA[loadIndex] = blockM + readRowA + i < M && readColA + nextTileID < K ?
+                    int colIndex = ((readColA + nextTileID)/(FH * FW)) * (FH * FW) + (FH * FW - 1) - ((readColA + nextTileID) % (FH * FW));
+                    bufferA[loadIndex] = blockM + readRowA + i < M && colIndex < K && readColA + nextTileID < K ?
                                          ptrA[(readRowA + i) * K + colIndex] : 0;
                 }
 

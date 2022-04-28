@@ -7,6 +7,7 @@
 
 #include "../tensor/Tensor.cuh"
 #include "../assist/TensorAssert.cuh"
+#include "../assist/Inspection.cuh"
 
 namespace seblas {
     /**

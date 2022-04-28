@@ -8,7 +8,7 @@
 #include "../tensor/Tensor.cuh"
 
 namespace seblas{
-    void inspect(Tensor* targer);
+    void inspect(Tensor* target);
 }
 
 #endif //SEANN_2_INSPECTION_CUH
