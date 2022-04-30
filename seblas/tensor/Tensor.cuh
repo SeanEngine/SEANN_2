@@ -26,7 +26,8 @@ using namespace nvcuda;
 using namespace seutil;
 namespace seblas{
 
-    const dim3 CUDA_BLOCK_SIZE = dim3(16, 16);
+    const dim3 CUDA_BLOCK_SIZE = {16, 16};
+    const dim3 CUDA_BLOCK_SIZE_3D = {16, 16, 4};
     typedef unsigned int uint32;
     const uint32 WARP_SIZE = 32;
 
@@ -95,6 +96,17 @@ namespace seblas{
         template<typename... Args>
         static Tensor* declare(Args &&... args) {
             return declare(shape4(std::forward<Args>(args)...));
+        }
+
+        Tensor* reshape(shape4 dim) {
+            assert(dim.size == this->dims.size);
+            this->dims = dim;
+            return this;
+        }
+
+        template<typename... Args>
+        Tensor* reshape(Args &&... args) {
+            return reshape(shape4(std::forward<Args>(args)...));
         }
 
         //create and destruct tensor elements

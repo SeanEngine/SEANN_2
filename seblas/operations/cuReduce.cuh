@@ -23,8 +23,14 @@ namespace seblas{
      */
     Tensor* reduce(Tensor* A, Tensor* out, Tensor* buffer, uint32 step);
 
-    //column reduce : stride = w
-    Tensor* reduce(Tensor* A, Tensor* out, uint32 step, uint32 stride);
+    //sum the elements in each row
+    Tensor* rowReduce(Tensor* A, Tensor* out, Tensor* buffer);
+
+    //sum the elements in each column
+    Tensor* colReduce(Tensor* A, Tensor* out, Tensor* buffer);
+
+    //sum the elements in each channel
+    Tensor* channelReduce(Tensor* A, Tensor* out, Tensor* buffer);
 
     float reduce(Tensor* A);
 }

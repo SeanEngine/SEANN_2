@@ -3,6 +3,8 @@
 //
 
 #include "cuReduce.cuh"
+#include "../tensor/Assistance.cuh"
+
 #define toFloat4R(ptr) (reinterpret_cast<float4*>(&(ptr))[0])
 #define topOff(a,b) (((a)+(b) - 1)/(b))
 
@@ -122,5 +124,19 @@ namespace seblas{
         assertCuda(__FILE__, __LINE__);
         buffer->constFill(0);
         return out;
+    }
+
+    Tensor* rowReduce(Tensor* A, Tensor* out, Tensor* buffer){
+        return reduce(A, out, buffer, A->dims.w);
+    }
+
+    Tensor* colReduce(Tensor* A, Tensor* out, Tensor* buffer){
+        reduce(transpose(A), out, buffer, A->dims.h);
+        transpose(A); //restore A
+        return out;
+    }
+
+    Tensor* channelReduce(Tensor* A, Tensor* out, Tensor* buffer){
+        return reduce(A, out, buffer, A->dims.h * A->dims.w);
     }
 }
