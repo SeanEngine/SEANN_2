@@ -4,7 +4,7 @@
 
 #include "cuReduce.cuh"
 #define toFloat4R(ptr) (reinterpret_cast<float4*>(&(ptr))[0])
-#define topOff(a,b) ((a)+(b) - 1)/(b)
+#define topOff(a,b) (((a)+(b) - 1)/(b))
 
 namespace seblas{
 
@@ -15,32 +15,6 @@ namespace seblas{
             val += __shfl_xor_sync(0x1, val, mask);
         }
         return val;
-    }
-
-    //supports step size up to 1024 float32
-    template <const uint32 BLOCK_WARPS>
-    __global__ void reduceD1024(Tensor* A, Tensor* outA, uint32 step){
-        uint32 idx = blockIdx.x * blockDim.x + threadIdx.x;
-        uint32 stepID = blockIdx.y;
-        uint32 tid = threadIdx.x;
-
-        //warp reduction
-        __shared__ float warpCache[BLOCK_WARPS];
-        const uint32 warpId = tid / WARP_SIZE;
-        const uint32 laneId = tid % WARP_SIZE;
-        float sum = idx < step ? A->elements[stepID * step + idx] : 0;
-        __syncthreads();
-
-        sum = warpReduce(sum);
-        if(laneId==0) warpCache[warpId] = sum;
-
-        __syncthreads();
-
-        if(warpId==0){
-            sum = laneId < BLOCK_WARPS ? warpCache[laneId] : 0.0f;
-            sum = warpReduce(sum);
-            if(laneId==0) outA->elements[stepID] = sum;
-        }
     }
 
     template <const uint32 BLOCK_WARPS>
@@ -98,6 +72,7 @@ namespace seblas{
 
         __syncthreads();
 
+        //final pass
         if(warpId==0){
             sum = laneId < BLOCK_WARPS ? warpCache[laneId] : 0.0f;
             sum = warpReduce(sum);
@@ -118,13 +93,14 @@ namespace seblas{
         }
 
         if(step < REDUCE_BLOCK + 1){
-            dim3 grid = dim3(1, A->dims.size / step);
+            dim3 grid = dim3(1, 1, A->dims.size / step);
             dim3 block = REDUCE_BLOCK;
-            reduceD1024<REDUCE_WARPS><<<grid, block>>>(A, out, step);
+            reduceD<REDUCE_WARPS><<<grid, block>>>(A, out, REDUCE_BLOCK, step);
             assertCuda(__FILE__, __LINE__);
             return out;
         }
 
+        //step exceeds block capacity, using looped reduction
         assert(buffer != nullptr);
         assert(buffer->dims.size >= topOff(step, REDUCE_BLOCK) * A->dims.size / step);
 
