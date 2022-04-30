@@ -38,6 +38,7 @@ namespace seblas {
      * @param C filters : OC * IC * FH * FW
      * @return
      */
+     //TODO: implement this and add BN support
     Tensor* convError(Tensor *A, Tensor *B, Tensor *C, int strideH, int strideW, int padH, int padW);
 }
 

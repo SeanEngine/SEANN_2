@@ -28,6 +28,7 @@ namespace seblas{
 
     const dim3 CUDA_BLOCK_SIZE = dim3(16, 16);
     typedef unsigned int uint32;
+    const uint32 WARP_SIZE = 32;
 
     /**
      * @Brief index4 is used to navigate within a 4D tensor
@@ -135,6 +136,9 @@ namespace seblas{
         Tensor* constFill(float val);
         Tensor* randUniform(float min, float max);
         Tensor* randNormal(float mean, float stddev);
+
+        //access
+        __host__ float get(uint32 offset) const;
     };
 }
 

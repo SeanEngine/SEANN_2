@@ -681,4 +681,12 @@ namespace seblas {
         assertCuda(__FILE__, __LINE__);
         return this;
     }
+
+    __host__ float Tensor::get(uint32 offset) const {
+        if(deviceId == -1) return elements[offset];
+        float output;
+        cudaMemcpy(&output, elements + offset, sizeof(float), cudaMemcpyDeviceToHost);
+        assertCuda(__FILE__, __LINE__);
+        return output;
+    }
 }
