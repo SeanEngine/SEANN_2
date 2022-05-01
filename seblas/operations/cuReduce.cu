@@ -397,6 +397,8 @@ namespace seblas{
     }
 
     Tensor* colSoftmax(Tensor* A, Tensor* out, Tensor* buffer){
-        return softmax(transpose(A), out, buffer, A->dims.w);
+        softmax(transpose(A), out, buffer, A->dims.w);
+        transpose(A);
+        return out;
     }
 }
