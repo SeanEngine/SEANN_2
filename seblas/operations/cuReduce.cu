@@ -313,6 +313,16 @@ namespace seblas{
         return out;
     }
 
+    float reduce(Tensor* A, Tensor* buffer){
+        float output;
+        auto* temp = Tensor::declare(1,1)->create();
+        reduce(A, temp, buffer, A->dims.size);
+        cudaMemcpy(&output, temp->elements, sizeof(float), cudaMemcpyDeviceToHost);
+        assertCuda(__FILE__, __LINE__);
+        temp->eliminate();
+        return output;
+    }
+
     Tensor* rowReduce(Tensor* A, Tensor* out, Tensor* buffer){
         return reduce(A, out, buffer, A->dims.w);
     }
@@ -366,7 +376,7 @@ namespace seblas{
             procSize = topOff(procSize, REDUCE_BLOCK);
         }
 
-        //do exp(val-max), prepare for reduction
+        //do exp(a-max), prepare for reduction
         dim3 grid = dim3(topOff(step, REDUCE_BLOCK), srcStepCount);
         softmaxPrepare<<<grid, REDUCE_BLOCK>>>(A, buffer, out, step);
         assertCuda(__FILE__, __LINE__);

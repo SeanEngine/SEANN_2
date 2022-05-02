@@ -9,6 +9,7 @@
 #include "cuActivation.cuh"
 #include "cuGEMM.cuh"
 #include "cuConv.cuh"
+#include "../tensor/Assistance.cuh"
 
 //including this file to include everything in the seblas operations
 namespace seblas{

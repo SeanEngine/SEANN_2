@@ -10,6 +10,7 @@
 namespace seblas{
     Tensor* transpose(Tensor* A);
     Tensor* transpose(Tensor* A, Tensor* B);
+    Tensor* powTensor(Tensor* A, float val);
 }
 
 #endif //SEANN_2_ASSISTANCE_CUH
