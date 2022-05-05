@@ -11,6 +11,7 @@
 using namespace seblas;
 
 namespace seann {
+
     /**
      * @brief for all the optimisers, exists the following functions:
      *
@@ -118,6 +119,9 @@ namespace seann {
         explicit AdaDelta(float LEARNING_RATE, Parameter* A, float BETA)
             : AdaGrad(LEARNING_RATE, A), BETA(BETA){}
 
+        explicit AdaDelta(float LEARNING_RATE, Parameter* A, float BETA, float EPSILON)
+            : AdaGrad(LEARNING_RATE, A, EPSILON), BETA(BETA){}
+
         void apply() override;
     };
 
@@ -140,7 +144,80 @@ namespace seann {
             m = Tensor::declare(A->grad->dims)->create();
         }
 
+        explicit Adam(float LEARNING_RATE, Parameter* A, float BETA1, float BETA2, float EPSILON)
+            : AdaGrad(LEARNING_RATE, A, EPSILON), BETA1(BETA1), BETA2(BETA2){
+            m = Tensor::declare(A->grad->dims)->create();
+        }
+
         void apply() override;
+    };
+
+    //these are the templates used to create optimizer for each updating parameter
+    //A template for the model will allow all operands initialize optimizers based on it
+    struct OptimizerInfo {
+        virtual Optimizer* create(Parameter* A) = 0;
+    };
+
+    struct OPTIMIZER_SGD : public OptimizerInfo {
+        float LEARNING_RATE;
+        explicit OPTIMIZER_SGD(float LEARNING_RATE) : LEARNING_RATE(LEARNING_RATE){}
+
+        Optimizer* create(Parameter* A) override {
+            return new SGD(LEARNING_RATE, A);
+        }
+    };
+
+    struct OPTIMIZER_MOMENTUM : public OptimizerInfo {
+        float LEARNING_RATE;
+        float BETA = 0.9;
+        explicit OPTIMIZER_MOMENTUM(float LEARNING_RATE, float BETA) : LEARNING_RATE(LEARNING_RATE), BETA(BETA){}
+        explicit OPTIMIZER_MOMENTUM(float LEARNING_RATE) : LEARNING_RATE(LEARNING_RATE){}
+
+        Optimizer* create(Parameter* A) override {
+            return new Momentum(LEARNING_RATE, A, BETA);
+        }
+    };
+
+    struct OPTIMIZER_ADAGRAD : public OptimizerInfo {
+        float LEARNING_RATE;
+        float EPSILON = 1e-10;
+        explicit OPTIMIZER_ADAGRAD(float LEARNING_RATE, float EPSILON) : LEARNING_RATE(LEARNING_RATE), EPSILON(EPSILON){}
+        explicit OPTIMIZER_ADAGRAD(float LEARNING_RATE) : LEARNING_RATE(LEARNING_RATE){}
+
+        Optimizer* create(Parameter* A) override {
+            return new AdaGrad(LEARNING_RATE, A, EPSILON);
+        }
+    };
+
+    struct OPTIMIZER_ADADELTA : public OptimizerInfo {
+        float LEARNING_RATE;
+        float BETA = 0.99;
+        float EPSILON = 1e-10;
+        explicit OPTIMIZER_ADADELTA(float LEARNING_RATE, float BETA, float EPSILON) :
+        LEARNING_RATE(LEARNING_RATE), BETA(BETA), EPSILON(EPSILON){}
+        explicit OPTIMIZER_ADADELTA(float LEARNING_RATE, float BETA) :
+        LEARNING_RATE(LEARNING_RATE), BETA(BETA){}
+        explicit OPTIMIZER_ADADELTA(float LEARNING_RATE) : LEARNING_RATE(LEARNING_RATE){}
+
+        Optimizer* create(Parameter* A) override {
+            return new AdaDelta(LEARNING_RATE, A, BETA, EPSILON);
+        }
+    };
+
+    struct OPTIMIZER_ADAM : public OptimizerInfo {
+        float LEARNING_RATE;
+        float BETA1 = 0.9;
+        float BETA2 = 0.99;
+        float EPSILON = 1e-10;
+        explicit OPTIMIZER_ADAM(float LEARNING_RATE, float BETA1, float BETA2, float EPSILON) :
+        LEARNING_RATE(LEARNING_RATE), BETA1(BETA1), BETA2(BETA2), EPSILON(EPSILON){}
+        explicit OPTIMIZER_ADAM(float LEARNING_RATE, float BETA1, float BETA2) :
+        LEARNING_RATE(LEARNING_RATE), BETA1(BETA1), BETA2(BETA2){}
+        explicit OPTIMIZER_ADAM(float LEARNING_RATE) : LEARNING_RATE(LEARNING_RATE){}
+
+        Optimizer* create(Parameter* A) override {
+            return new Adam(LEARNING_RATE, A, BETA1, BETA2, EPSILON);
+        }
     };
 
 } // seann

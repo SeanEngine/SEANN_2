@@ -154,7 +154,7 @@ namespace seann {
             float gradVal = A->grad->elements[idx];
             float mVal = BETA1 * m->elements[idx] + (1-BETA1) * gradVal;
             float vVal = BETA2 * V->elements[idx] + (1-BETA2) * gradVal * gradVal;
-            A->a->elements[idx] -= LEARNING_RATE * mVal / (sqrt(vVal) + EPSILON);
+            A->a->elements[idx] -= LEARNING_RATE * (mVal / (sqrt(vVal) + EPSILON));
             m->elements[idx] = mVal;
             V->elements[idx] = vVal;
             A->grad->elements[idx] = 0;

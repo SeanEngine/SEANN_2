@@ -10,18 +10,19 @@
 namespace seann {
     class OperandBase {
     public:
-        Parameter* X;  //input
-        Parameter* Y;  //output
+        Parameter* X{};  //input
+        Parameter* Y{};  //output
 
         //calculate : X -> Y
         virtual void forward() = 0;
 
+        //calculate grads for operand parameters : weights, bias, etc
         virtual void paramGrads() = 0;
 
+        //calculate grads for operand input : X
         virtual void xGrads() = 0;
 
-        virtual void updateX() = 0;
-
+        //do the gradient decent with optimizers
         virtual void updateParams() = 0;
     };
 }
