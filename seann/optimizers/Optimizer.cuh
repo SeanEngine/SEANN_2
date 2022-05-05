@@ -24,10 +24,10 @@ namespace seann {
     struct Optimizer {
     public:
         float LEARNING_RATE{};
-        Parameter* target;
+        Parameter* A;
 
-        explicit Optimizer(float LEARNING_RATE, Parameter* target)
-           : LEARNING_RATE(LEARNING_RATE), target(target){}
+        explicit Optimizer(float LEARNING_RATE, Parameter* A)
+           : LEARNING_RATE(LEARNING_RATE), A(A){}
 
 
         //apply the gradient to the parameters (weights, biases, etc)
@@ -42,15 +42,10 @@ namespace seann {
     //This optimizer does not have batch behaviors
     struct SGD : public Optimizer {
     public:
-        explicit SGD(float LEARNING_RATE, Parameter* target)
-            : Optimizer(LEARNING_RATE, target){}
+        explicit SGD(float LEARNING_RATE, Parameter* A)
+            : Optimizer(LEARNING_RATE, A){}
 
-
-        void apply() override {
-            target->a = *target->a - (*target->grad * LEARNING_RATE);
-            target->grad->constFill(0);
-        }
-
+        void apply() override;
         void batchApply() override{}
     };
 
@@ -59,15 +54,12 @@ namespace seann {
     struct BGD : public Optimizer {
     public:
         float BATCH_SIZE;
-        explicit BGD(float LEARNING_RATE, Parameter* target, float BATCH_SIZE)
-            : Optimizer(LEARNING_RATE, target), BATCH_SIZE(BATCH_SIZE){}
+        explicit BGD(float LEARNING_RATE, Parameter* A, float BATCH_SIZE)
+            : Optimizer(LEARNING_RATE, A), BATCH_SIZE(BATCH_SIZE){}
 
         void apply() override {}
 
-        void batchApply() override{
-            target->a = *target->a - (*target->grad * (LEARNING_RATE/BATCH_SIZE));
-            target->grad->constFill(0);
-        }
+        void batchApply() override;
     };
 
 
@@ -78,23 +70,17 @@ namespace seann {
         float BETA = 0.9;
         Tensor* m;
 
-        explicit Momentum(float LEARNING_RATE, Parameter* target)
-            : Optimizer(LEARNING_RATE, target){
-            m = Tensor::declare(target->grad->dims)->create();
+        explicit Momentum(float LEARNING_RATE, Parameter* A)
+            : Optimizer(LEARNING_RATE, A){
+            m = Tensor::declare(A->grad->dims)->create();
         }
 
-        explicit Momentum(float LEARNING_RATE, Parameter* target, float BETA)
-            : Momentum(LEARNING_RATE, target){
+        explicit Momentum(float LEARNING_RATE, Parameter* A, float BETA)
+            : Momentum(LEARNING_RATE, A){
             this->BETA = BETA;
         }
 
-        void apply() override {
-            m = *(*m * BETA) + *target->grad * (1 - BETA);
-            target->a = *target->a - *m * LEARNING_RATE;
-            *m / LEARNING_RATE;   //we need to recover this
-            target->grad->constFill(0);
-        }
-
+        void apply() override;
         void batchApply() override{}
     };
 
@@ -104,52 +90,35 @@ namespace seann {
     struct AdaGrad : public Optimizer {
     public:
         float EPSILON = 1e-10;
-        Tensor* buffer;
-        Tensor* gradCopy;
+        Tensor* V;
 
-         //A diag matrix with all diag elements value equal to the sum of
-         //squared gradients, here stored in float to save for space
-        float gVal = 0;
-
-        explicit AdaGrad(float LEARNING_RATE, Parameter* target)
-            : Optimizer(LEARNING_RATE, target){
-            buffer = target->grad->dims.size < 1025 ? nullptr :
-                    Tensor::declare(target->grad->dims.size/1024, 1)->create();
-            gradCopy = Tensor::declare(target->grad->dims)->create();
+        explicit AdaGrad(float LEARNING_RATE, Parameter* A)
+            : Optimizer(LEARNING_RATE, A){
+            V = Tensor::declare(A->grad->dims)->create();
         }
 
-        explicit AdaGrad(float LEARNING_RATE, Parameter* target, float EPSILON)
-            : AdaGrad(LEARNING_RATE, target){
+        explicit AdaGrad(float LEARNING_RATE, Parameter* A, float EPSILON)
+            : AdaGrad(LEARNING_RATE, A){
             this->EPSILON = EPSILON;
         }
 
-        void apply() override {
-            gradCopy->copyD2D(target->grad);
-            gVal += reduce(powTensor(gradCopy,2), buffer);
-            target->a = *target->a - (*target->grad * (LEARNING_RATE / (sqrt(gVal) + EPSILON)));
-            target->grad->constFill(0);
-        }
-
+        void apply() override;
         void batchApply() override{}
     };
 
-    //same as AdaGrad but V[t] = β * V[t-1] + (1 - β) * sum(g[t]^2)
+    //same as AdaGrad but V[t] = β * V[t-1] + (1 - β) * g[t]^2
+    //also called RMSProp
     struct AdaDelta : public AdaGrad {
     public:
         float BETA = 0.99;
 
-        explicit AdaDelta(float LEARNING_RATE, Parameter* target)
-            : AdaGrad(LEARNING_RATE, target){}
+        explicit AdaDelta(float LEARNING_RATE, Parameter* A)
+            : AdaGrad(LEARNING_RATE, A){}
 
-        explicit AdaDelta(float LEARNING_RATE, Parameter* target, float BETA)
-            : AdaGrad(LEARNING_RATE, target), BETA(BETA){}
+        explicit AdaDelta(float LEARNING_RATE, Parameter* A, float BETA)
+            : AdaGrad(LEARNING_RATE, A), BETA(BETA){}
 
-        void apply() override{
-            gradCopy->copyD2D(target->grad);
-            gVal = BETA * gVal + (1-BETA) * reduce(powTensor(gradCopy,2), buffer);
-            target->a = *target->a - (*target->grad * (LEARNING_RATE / (sqrt(gVal) + EPSILON)));
-            target->grad->constFill(0);
-        }
+        void apply() override;
     };
 
     //Adaptive Momentum : m[t] = m[t-1] * β1 + (1 - β1) * g[t]
@@ -161,23 +130,17 @@ namespace seann {
         float BETA2 = 0.99;
         Tensor* m;
 
-        explicit Adam(float LEARNING_RATE, Parameter* target)
-            : AdaGrad(LEARNING_RATE, target){
-            m = Tensor::declare(target->grad->dims)->create();
+        explicit Adam(float LEARNING_RATE, Parameter* A)
+            : AdaGrad(LEARNING_RATE, A){
+            m = Tensor::declare(A->grad->dims)->create();
         }
 
-        explicit Adam(float LEARNING_RATE, Parameter* target, float BETA1, float BETA2)
-            : AdaGrad(LEARNING_RATE, target), BETA1(BETA1), BETA2(BETA2){
-            m = Tensor::declare(target->grad->dims)->create();
+        explicit Adam(float LEARNING_RATE, Parameter* A, float BETA1, float BETA2)
+            : AdaGrad(LEARNING_RATE, A), BETA1(BETA1), BETA2(BETA2){
+            m = Tensor::declare(A->grad->dims)->create();
         }
 
-        void apply() override {
-            m = *(*m * BETA1) + *gradCopy->copyD2D(target->grad) * (1 - BETA1);
-            gVal = BETA2 * gVal + (1-BETA2) * reduce(powTensor(gradCopy->copyD2D(target->grad) ,2), buffer);
-            target->a = *target->a - (*m * (LEARNING_RATE / (sqrt(gVal) + EPSILON)));
-            *m / (LEARNING_RATE / (sqrt(gVal) + EPSILON));  //m is revovered for next iteration
-            target->grad->constFill(0);
-        }
+        void apply() override;
     };
 
 } // seann
