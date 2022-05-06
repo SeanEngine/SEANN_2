@@ -28,6 +28,19 @@ namespace seann {
             return create(shape4(std::forward<Args>(args)...));
         }
 
+        static Parameter* declare(shape4 dims){
+            Parameter* p;
+            cudaMallocHost(&p, sizeof(Parameter));
+            p->a = Tensor::declare(dims);
+            p->grad = Tensor::declare(dims);
+            return p;
+        };
+
+        template<typename... Args>
+        static Parameter* declare(Args &&... args) {
+            return declare(shape4(std::forward<Args>(args)...));
+        }
+
         static Parameter* create(Tensor* src){
             Parameter* p;
             cudaMallocHost(&p, sizeof(Parameter));
@@ -35,8 +48,16 @@ namespace seann {
             p->grad = Tensor::declare(src->dims)->create();
             return p;
         };
-    };
 
+        //inherit keeps the shape of the parameter
+        //but uses the same element memory block as another parameter
+        Parameter* inherit(Parameter* src){
+            assert(src->a->dims.size == this->a->dims.size);
+            this->a->attach(src->a);
+            this->grad->attach(src->grad);
+            return this;
+        }
+    };
 } // seann
 
 #endif //SEANN_2_PARAMETER_CUH

@@ -22,8 +22,19 @@ namespace seann {
 
         NetParam(Parameter* A, Optimizer* opt) : A(A), opt(opt) {}
 
-        NetParam(Parameter* A, OptimizerInfo info) : A(A) {
-            opt = info.create(A);
+        NetParam(Parameter* A, OptimizerInfo* info) : A(A) {
+            opt = info->create(A);
+        }
+
+        NetParam(shape4 shape, OptimizerInfo* info) {
+            A = Parameter::create(shape);
+            opt = info->create(A);
+        }
+
+        template<typename... Args>
+        explicit NetParam(OptimizerInfo* info, Args&&... args) {
+            A = Parameter::create(std::forward<Args>(args)...);
+            opt = info->create(A);
         }
     };
 }
