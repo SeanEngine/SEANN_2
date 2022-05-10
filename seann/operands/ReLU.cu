@@ -5,7 +5,6 @@
 #include "ReLU.cuh"
 
 namespace seann {
-
     void ReLU::forward() {
         relu(X->a, Y->a);
     }
@@ -14,6 +13,4 @@ namespace seann {
     void ReLU::xGrads() {
         *reluGrad(X->a, X->grad) * Y->grad;
     }
-
-
 } // seann

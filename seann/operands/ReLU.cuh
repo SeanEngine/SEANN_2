@@ -28,7 +28,6 @@ namespace seann {
 
         void paramGrads() override{}
     };
-
 } // seann
 
 #endif //SEANN_2_RELU_CUH

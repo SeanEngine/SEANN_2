@@ -26,11 +26,6 @@ namespace seann {
             opt = info->create(A);
         }
 
-        NetParam(shape4 shape, OptimizerInfo* info) {
-            A = Parameter::create(shape);
-            opt = info->create(A);
-        }
-
         template<typename... Args>
         explicit NetParam(OptimizerInfo* info, Args&&... args) {
             A = Parameter::create(std::forward<Args>(args)...);
