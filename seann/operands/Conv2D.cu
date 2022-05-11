@@ -20,6 +20,23 @@ namespace seann {
     }
 
     void Conv2D::paramGrads() {
+        convError(Y->grad, X->a, filter->A->grad, (int)strideH, (int)strideW, (int)padH, (int)padW);
+        if(WITH_BIAS){
+            bias->A->grad = channelReduce(Y->grad, bias->A->grad, reduceBuf);
+        }
+    }
 
+    void Conv2D::updateParams() {
+        filter->opt->apply();
+        if(WITH_BIAS){
+            bias->opt->apply();
+        }
+    }
+
+    void Conv2D::batchUpdateParams() {
+        filter->opt->batchApply();
+        if(WITH_BIAS){
+            bias->opt->batchApply();
+        }
     }
 }

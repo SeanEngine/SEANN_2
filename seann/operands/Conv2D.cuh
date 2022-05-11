@@ -19,6 +19,7 @@ namespace seann {
         uint32 padH;
         uint32 padW;
         bool WITH_BIAS = false;
+        Tensor* reduceBuf; //for calculating gradients of bias
 
         Conv2D(shape4 inShape, shape4 filterShape, uint32 strideH, uint32 strideW, uint32 padH, uint32 padW, bool WITH_BIAS)
         : filterShape(filterShape), strideH(strideH), strideW(strideW), padH(padH), padW(padW) {
@@ -30,6 +31,10 @@ namespace seann {
 
             Y = Parameter::create(outShape);
             this->WITH_BIAS = WITH_BIAS;
+            if(WITH_BIAS) {
+                reduceBuf = outShape.h * outShape.w > 1024 ?
+                        Tensor::declare(filterShape.n, outShape.h * outShape.w / 1024) : nullptr;
+            }
         }
 
         void initNetParams(OptimizerInfo *info) override {
@@ -42,6 +47,10 @@ namespace seann {
         void xGrads() override;
 
         void paramGrads() override;
+
+        void updateParams() override;
+
+        void batchUpdateParams() override;
     };
 }
 
