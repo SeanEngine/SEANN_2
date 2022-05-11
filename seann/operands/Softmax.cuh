@@ -1,23 +1,25 @@
 //
-// Created by Dylan on 5/6/2022.
+// Created by Dylan on 5/11/2022.
 //
 
-#ifndef SEANN_2_RELU_CUH
-#define SEANN_2_RELU_CUH
+#ifndef SEANN_2_SOFTMAX_CUH
+#define SEANN_2_SOFTMAX_CUH
 
 #include "OperandBase.cuh"
 
 namespace seann {
-    class ReLU : public OperandBase {
+    class Softmax : public OperandBase {
     public:
         uint32 INPUT_SIZE;
-        explicit ReLU(uint32 INPUT_SIZE) : INPUT_SIZE(INPUT_SIZE) {
+        Tensor* reduceBuffer;
+        explicit Softmax(uint32 INPUT_SIZE) : INPUT_SIZE(INPUT_SIZE) {
             X = Parameter::declare(INPUT_SIZE, 1);
             Y = Parameter::create(INPUT_SIZE, 1);
+            reduceBuffer = INPUT_SIZE / 1024 > 0 ? Tensor::declare(INPUT_SIZE,1)->create() : nullptr;
         }
 
         string info() override {
-            return "ReLU{ " + std::to_string(INPUT_SIZE) + " }";
+            return "Softmax{ " + to_string(INPUT_SIZE) + " }";
         }
 
         void initNetParams(OptimizerInfo *info) override{}
@@ -32,6 +34,7 @@ namespace seann {
 
         void paramGrads() override{}
     };
-} // seann
+}
 
-#endif //SEANN_2_RELU_CUH
+
+#endif //SEANN_2_SOFTMAX_CUH

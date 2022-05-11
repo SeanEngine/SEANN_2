@@ -37,6 +37,10 @@ namespace seann {
             }
         }
 
+        string info() override {
+            return "Conv2D{ " + filter->A->a->dims.toString() + ", " + Y->a->dims.toString() + " }";
+        }
+
         void initNetParams(OptimizerInfo *info) override {
             filter = new NetParam(info, filterShape);
             if (WITH_BIAS) bias = new NetParam(info, filterShape.n, 1);

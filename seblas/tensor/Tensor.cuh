@@ -72,6 +72,11 @@ namespace seblas{
 
         __device__ __host__ shape4(uint32 h, uint32 w)
             : index4(1, 1, h, w){ size = h*w; }
+
+        string toString() const{
+            return "(" + to_string(n) + "," + to_string(c) +
+            "," + to_string(h) + "," + to_string(w) + ")";
+        }
     };
 
     /**

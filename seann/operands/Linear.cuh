@@ -22,6 +22,10 @@ namespace seann {
             Y = Parameter::create(OUTPUT_SIZE, 1);
         }
 
+        string info() override {
+            return "Linear{" + to_string(INPUT_SIZE) + "," + to_string(OUTPUT_SIZE) + "}";
+        }
+
         void initNetParams(OptimizerInfo *info) override;
 
         void forward() override;
