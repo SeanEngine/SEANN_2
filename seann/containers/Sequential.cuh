@@ -18,12 +18,11 @@ namespace seann {
         OperandBase** operands{};
         uint32 OPERAND_COUNT;
 
-        template <class T>
-        Sequential(std::initializer_list<T*> list){
+        Sequential(std::initializer_list<OperandBase*> list){
             OPERAND_COUNT = list.size();
             cudaMallocHost(&operands, OPERAND_COUNT * sizeof(OperandBase*));
             for(auto i = 0; i < OPERAND_COUNT; i++) {
-                operands[i] = list[i];
+                operands[i] = list.begin()[i];
             }
 
             //bind inputs and outputs
@@ -31,11 +30,6 @@ namespace seann {
             operands[0]->X->inherit(netX);
             netY = Parameter::declare(operands[OPERAND_COUNT-1]->Y->a->dims)
                     ->inherit(operands[OPERAND_COUNT-1]->Y);
-
-            logInfo(seio::LOG_SEG_SEANN, "Constructing Model: ");
-            for(auto i = 0; i < OPERAND_COUNT; i++) {
-                logInfo(seio::LOG_SEG_SEANN, operands[i]->info(), seio::LOG_COLOR_LIGHT_BLUE);
-            }
         }
 
         void waive() const;

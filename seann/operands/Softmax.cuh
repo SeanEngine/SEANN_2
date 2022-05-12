@@ -19,7 +19,7 @@ namespace seann {
         }
 
         string info() override {
-            return "Softmax{ " + to_string(INPUT_SIZE) + " }";
+            return "Softmax { " + to_string(INPUT_SIZE) + " }";
         }
 
         void initNetParams(OptimizerInfo *info) override{}

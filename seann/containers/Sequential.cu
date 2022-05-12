@@ -16,8 +16,10 @@ namespace seann {
     }
 
     void Sequential::construct(OptimizerInfo* info) const {
+        logInfo(seio::LOG_SEG_SEANN, "Constructing Model: ");
         for (int i = 0; i < OPERAND_COUNT; i++) {
             operands[i]->initNetParams(info);
+            logDebug(seio::LOG_SEG_SEANN, operands[i]->info());
         }
     }
 } // seann

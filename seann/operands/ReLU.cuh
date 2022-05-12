@@ -17,7 +17,7 @@ namespace seann {
         }
 
         string info() override {
-            return "ReLU{ " + std::to_string(INPUT_SIZE) + " }";
+            return "ReLU { " + std::to_string(INPUT_SIZE) + " }";
         }
 
         void initNetParams(OptimizerInfo *info) override{}

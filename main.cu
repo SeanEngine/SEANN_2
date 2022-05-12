@@ -1,16 +1,29 @@
 #include <iostream>
 #include "seblas/operations/cuOperations.cuh"
-#include "seann/optimizers/Optimizer.cuh"
+#include "seann/seann.cuh"
+
 
 using namespace seblas;
 using namespace seann;
 
 int main(int argc, char** argv) {
-    Tensor* B = Tensor::declare(2, 3, 32, 32)->create()->randNormal(1,0);
-    Tensor* A = Tensor::declare(2, 6, 16, 16)->create()->randNormal(1,0);
-    Tensor* C = Tensor::declare(6,3,3,3)->create();
+    auto* model = new Sequential({
+        new Conv2D(shape4(3,32,32), shape4(3,3,3,3),1,1,1,1,false),
+        new ReLU(3072),
+        new Conv2D(shape4(3,32,32), shape4(3,3,3,3),1,1,1,1,false),
+        new ReLU(3072),
+        new Conv2D(shape4(3,32,32), shape4(3,3,3,3),2,2,1,1,false),
+        new ReLU(768),
+        new Conv2D(shape4(3,16,16), shape4(3,3,3,3),1,1,1,1,false),
+        new ReLU(768),
+        new Linear(768,768),
+        new ReLU(768),
+        new Linear(768,10),
+        new Softmax(10)
+    });
 
-    convError(A,B,C,2,2,1,1);
+    OptimizerInfo* info = new OPTIMIZER_ADAM(0.001, 0.9, 0.999, 1e-8);
 
-    inspect(C);
+    model->construct(info);
+    model->waive();
 }
