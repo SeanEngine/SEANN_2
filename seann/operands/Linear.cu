@@ -12,15 +12,15 @@ namespace seann {
 
     // a[l] = w[l] * a[l-1] + b[l]
     void Linear::forward() {
-        sgemm(weights->A->a, X->a, Y->a);
-        Y->a = *Y->a + biases->A->a;
+        sgemm(weights->data(), X->a, Y->a);
+        Y->a = *Y->a + biases->data();
     }
 
     void Linear::paramGrads() {
         // ∂w = error * a^T
         sgemmNTA(Y->grad, X->a, weights->A->grad);
         // ∂b = error
-        Y->grad->copyD2D(biases->A->grad);
+        *biases->A->grad + Y->grad;
     }
 
     void Linear::updateParams() {
@@ -35,6 +35,12 @@ namespace seann {
 
     void Linear::xGrads() {
         // ∂x = w^T * ∂z
-        sgemmTN(weights->A->a, Y->grad, X->grad);
+        sgemmTN(weights->data(), Y->grad, X->grad);
+    }
+
+    void Linear::randFillNetParams() {
+        uint32 K = weights->data()->dims.w;
+        weights->data()->randNormal( 0, (float)sqrt(2.0 / (float) K));
+        biases->data()->randNormal(0, (float)sqrt(2.0 / (float) biases->data()->dims.size));
     }
 } // seann

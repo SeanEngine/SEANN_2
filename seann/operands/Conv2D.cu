@@ -7,16 +7,16 @@
 namespace seann {
     void Conv2D::forward() {
         if(WITH_BIAS){
-            conv(filter->A->a, X->a, Y->a,
-                 (int)strideH, (int)strideW, (int)padH, (int)padW, bias->A->a);
+            conv(filter->data(), X->a, Y->a,
+                 (int)strideH, (int)strideW, (int)padH, (int)padW, bias->data());
             return;
         }
-        conv(filter->A->a, X->a, Y->a,
+        conv(filter->data(), X->a, Y->a,
              (int)strideH, (int)strideW, (int)padH, (int)padW, nullptr);
     }
 
     void Conv2D::xGrads() {
-        convDerive(filter->A->a, Y->grad, X->grad, (int)strideH, (int)strideW, (int)padH, (int)padW);
+        convDerive(filter->data(), Y->grad, X->grad, (int)strideH, (int)strideW, (int)padH, (int)padW);
     }
 
     void Conv2D::paramGrads() {
@@ -38,5 +38,12 @@ namespace seann {
         if(WITH_BIAS){
             bias->opt->batchApply();
         }
+    }
+
+    void Conv2D::randFillNetParams() {
+        uint32 K = filter->data()->dims.size / filter->data()->dims.n;
+        filter->data()->randNormal(0, (float)sqrt(2.0 / (float) K));
+        if (WITH_BIAS)
+            bias->data()->randNormal(0, (float)sqrt(2.0 / (float)filter->data()->dims.n));
     }
 }

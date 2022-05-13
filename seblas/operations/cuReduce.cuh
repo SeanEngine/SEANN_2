@@ -38,16 +38,16 @@ namespace seblas{
      * @brief Do the softmax operations
      * @param A
      * @param out output tensor with shape (A->size / steps, 1)
-     * @param step the size of chunk to run softmax on
+     * @param step the size of chunk to forward softmax on
      * @param buffer buffer for reduction (can be nullPointer)
      * @return
      */
     Tensor* softmax(Tensor* A, Tensor* out, Tensor* buffer, uint32 step);
 
-    //run softmax on rows:
+    //forward softmax on rows:
     Tensor* rowSoftmax(Tensor* A, Tensor* out, Tensor* buffer);
 
-    //run softmax on columns:
+    //forward softmax on columns:
     Tensor* colSoftmax(Tensor* A, Tensor* out, Tensor* buffer);
 }
 

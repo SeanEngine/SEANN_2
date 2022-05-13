@@ -31,6 +31,8 @@ namespace seann {
         void updateParams() override{}
 
         void paramGrads() override{}
+
+        void randFillNetParams() override{}
     };
 } // seann
 

@@ -37,6 +37,8 @@ namespace seann {
         void batchUpdateParams() override;
 
         void xGrads() override;
+
+        void randFillNetParams() override;
     };
 } // seann
 

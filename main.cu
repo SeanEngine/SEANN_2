@@ -26,4 +26,12 @@ int main(int argc, char** argv) {
 
     model->construct(info);
     model->waive();
+    model->randInit();
+    model->setLoss(CrossEntropyLoss);
+
+    auto* data = Tensor::declare(3,32,32)->create()->randNormal(2,3);
+    inspect(model->forward(data));
+    auto* label = Tensor::declare(10,1)->create()->randNormal(0,0.3);
+    inspect(model->backward(label));
+    model->learn();
 }

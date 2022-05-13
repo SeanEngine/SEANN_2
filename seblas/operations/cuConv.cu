@@ -679,7 +679,7 @@ namespace seblas{
             for(int rn = 0; rn < REGIS_N; rn ++){
                 if((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
                     C->elements[(blockM + threadIdx.y * REGIS_M + rm) * N
-                                + (blockN + threadIdx.x * REGIS_N + rn)] = regisC[rm][rn] / A->dims.n;
+                                + (blockN + threadIdx.x * REGIS_N + rn)] += regisC[rm][rn] / A->dims.n;
                 }
             }
         }

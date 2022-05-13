@@ -129,7 +129,7 @@ namespace seblas{
         }
     }
 
-    //run the softmax in the same block
+    //forward the softmax in the same block
     template <const uint32 BLOCK_WARPS>
     __global__ void softmaxD1024(Tensor* A, Tensor* out, uint32 step){
         uint32 idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -245,7 +245,7 @@ namespace seblas{
         toFloat4R(out->elements[stepID * step + idx]) = toFloat4R(vals);
     }
 
-    //run the exponentials
+    //forward the exponentials
     __global__ void softmaxPrepare(Tensor* A, Tensor* buf, Tensor* out, uint32 step){
         uint32 idx = blockIdx.x * blockDim.x + threadIdx.x;
         if(idx >= step) return;
@@ -257,7 +257,7 @@ namespace seblas{
         out->elements[stepID * step + idx] = result;
     }
 
-    //run the division
+    //forward the division
     __global__ void softmaxFinalize(Tensor* buf, Tensor* out, uint32 step){
         uint32 idx = blockIdx.x * blockDim.x + threadIdx.x;
         if(idx >= step) return;

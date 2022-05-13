@@ -35,6 +35,8 @@ namespace seann {
 
         virtual void initNetParams(OptimizerInfo* info) = 0;
 
+        virtual void randFillNetParams() = 0;
+
         virtual string info() = 0;
 
         //X should be bind to the Y of the previous operand

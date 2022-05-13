@@ -7,12 +7,14 @@
 
 #include "../components/Parameter.cuh"
 #include "../operands/OperandBase.cuh"
+#include "../optimizers/Loss.cuh"
 
 namespace seann {
     class Sequential {
     public:
         Parameter* netX;
         Parameter* netY;
+        LossFunc loss{};
 
         //a list of pointers to all the initialized operands
         OperandBase** operands{};
@@ -35,6 +37,20 @@ namespace seann {
         void waive() const;
 
         void construct(OptimizerInfo* info) const;
+
+        void setLoss(LossFunc loss);
+
+        void randInit() const;
+
+        Tensor* forward() const;
+
+        Tensor* forward(Tensor* X) const;
+
+        Tensor* backward(Tensor* labelY) const;
+
+        void learn() const;
+
+        void learnBatch() const;
     };
 } // seann
 

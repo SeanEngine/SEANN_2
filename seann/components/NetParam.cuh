@@ -31,6 +31,14 @@ namespace seann {
             A = Parameter::create(std::forward<Args>(args)...);
             opt = info->create(A);
         }
+
+        Tensor* data() const{
+            return A->a;
+        }
+
+        Tensor* grad() const{
+            return A->grad;
+        }
     };
 }
 
