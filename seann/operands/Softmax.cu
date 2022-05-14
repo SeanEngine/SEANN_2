@@ -11,5 +11,5 @@ void seann::Softmax::forward() {
 void seann::Softmax::xGrads() {
     //Y->grad = Y->a - correct
     //this is controlled by loss function
-    Y->grad->copyD2D(X->grad);
+    Y->grad->copyToD2D(X->grad);
 }

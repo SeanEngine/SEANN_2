@@ -5,7 +5,7 @@
 
 namespace seann{
     void CrossEntropyLoss(Parameter* Y, Tensor* label){
-        Y->a->copyD2D(Y->grad);
+        Y->a->copyToD2D(Y->grad);
         *Y->grad - label;
     }
 }

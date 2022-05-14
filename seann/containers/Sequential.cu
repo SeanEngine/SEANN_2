@@ -31,7 +31,7 @@ namespace seann {
     }
 
     Tensor* Sequential::forward(Tensor* X) const {
-        X->copyD2D(netX->a);
+        X->copyToD2D(netX->a);
         for (int i = 0; i < OPERAND_COUNT; i++) {
             operands[i]->forward();
         }

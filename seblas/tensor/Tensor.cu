@@ -388,7 +388,7 @@ namespace seblas {
 
     Tensor *Tensor::toDevice() {
         auto* output = Tensor::declare(dims)->create();
-        copyH2D(output);
+        copyToH2D(output);
         destroyHost();
         cudaFreeHost(this);
         return output;
@@ -396,48 +396,48 @@ namespace seblas {
 
     Tensor *Tensor::ripOffDevice() const {
         auto* output = Tensor::declare(dims)->createHost();
-        copyD2H(output);
+        copyToD2H(output);
         assertCuda(__FILE__, __LINE__);
         return output;
     }
 
     Tensor *Tensor::ripOffHost() const {
         auto* output = Tensor::declare(dims)->create();
-        copyH2D(output);
+        copyToH2D(output);
         assertCuda(__FILE__, __LINE__);
         return output;
     }
 
     Tensor *Tensor::toHost() {
         auto* output = Tensor::declare(dims)->createHost();
-        copyD2H(output);
+        copyToD2H(output);
         destroy();
         cudaFreeHost(this);
         return output;
     }
 
-    Tensor *Tensor::copyH2D(Tensor *onDevice) const {
+    Tensor *Tensor::copyToH2D(Tensor *onDevice) const {
         assert(dims.size == onDevice->dims.size);
         cudaMemcpy(onDevice->elements, elements, sizeof(float) * dims.size, cudaMemcpyHostToDevice);
         assertCuda(__FILE__, __LINE__);
         return onDevice;
     }
 
-    Tensor *Tensor::copyD2H(Tensor *onHost) const {
+    Tensor *Tensor::copyToD2H(Tensor *onHost) const {
         assert(dims.size == onHost->dims.size);
         cudaMemcpy(onHost->elements, elements, sizeof(float) * dims.size, cudaMemcpyDeviceToHost);
         assertCuda(__FILE__, __LINE__);
         return onHost;
     }
 
-    Tensor *Tensor::copyD2D(Tensor *onDevice) const {
+    Tensor *Tensor::copyToD2D(Tensor *onDevice) const {
         assert(dims.size == onDevice->dims.size);
         cudaMemcpy(onDevice->elements, elements, sizeof(float) * dims.size, cudaMemcpyDeviceToDevice);
         assertCuda(__FILE__, __LINE__);
         return onDevice;
     }
 
-    Tensor *Tensor::copyH2H(Tensor *onHost) const {
+    Tensor *Tensor::copyToH2H(Tensor *onHost) const {
         assert(dims.size == onHost->dims.size);
         cudaMemcpy(onHost->elements, elements, sizeof(float) * dims.size, cudaMemcpyHostToHost);
         assertCuda(__FILE__, __LINE__);

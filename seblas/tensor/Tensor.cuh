@@ -130,10 +130,10 @@ namespace seblas{
         Tensor* toHost();
         [[nodiscard]] Tensor* ripOffDevice() const;
         [[nodiscard]] Tensor* ripOffHost() const;
-        Tensor* copyH2D(Tensor* onDevice) const;
-        Tensor* copyD2H(Tensor* onHost) const;
-        Tensor* copyD2D(Tensor* onDevice) const;
-        Tensor* copyH2H(Tensor* onHost) const;
+        Tensor* copyToH2D(Tensor* onDevice) const;
+        Tensor* copyToD2H(Tensor* onHost) const;
+        Tensor* copyToD2D(Tensor* onDevice) const;
+        Tensor* copyToH2H(Tensor* onHost) const;
 
         //attaching (Tensors sharing same elements)
         Tensor* attach(Tensor* other);
