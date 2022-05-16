@@ -23,7 +23,7 @@ namespace seann {
         }
 
         string info() override {
-            return "Linear { " + to_string(INPUT_SIZE) + ", " + to_string(OUTPUT_SIZE) + " }";
+            return "Linear        { " + to_string(INPUT_SIZE) + ", " + to_string(OUTPUT_SIZE) + " }";
         }
 
         void initNetParams(OptimizerInfo *info) override;

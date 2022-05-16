@@ -38,7 +38,7 @@ namespace seann {
         }
 
         string info() override {
-            return "Conv2D { filter: " + filter->data()->dims.toString() + ", input feature: " + Y->a->dims.toString() + " }";
+            return "Conv2D        { filter: " + filter->data()->dims.toString() + ", input feature: " + Y->a->dims.toString() + " }";
         }
 
         void initNetParams(OptimizerInfo *info) override {
