@@ -19,7 +19,7 @@ namespace seann {
         logInfo(seio::LOG_SEG_SEANN, "Constructing Model: ");
         for (int i = 0; i < OPERAND_COUNT; i++) {
             operands[i]->initNetParams(info);
-            logDebug(seio::LOG_SEG_SEANN, operands[i]->info());
+            logInfo(seio::LOG_SEG_SEANN, operands[i]->info());
         }
     }
 
@@ -66,6 +66,26 @@ namespace seann {
     void Sequential::learnBatch() const {
         for (int i = 0; i < OPERAND_COUNT; i++) {
             operands[i]->batchUpdateParams();
+        }
+    }
+
+    //this train method does not support BN
+    void Sequential::train(Dataset *data) const {
+        data->genBatch();
+        while(data->epochID < data->MAX_EPOCH){
+            uint32 batchID = data->batchID-1;
+            auto pass = data->genBatchAsync();
+
+            //training over each sample in the batch
+            for(uint32 sampleID = 0; sampleID < data->BATCH_SIZE; sampleID++){
+                forward(data->dataBatch[batchID%2][sampleID]->X);
+                backward(data->dataBatch[batchID%2][sampleID]->label);
+                learn();
+            }
+
+            //BGD updates
+            learnBatch();
+            pass.join(); //wait for next batch to prefetch
         }
     }
 } // seann

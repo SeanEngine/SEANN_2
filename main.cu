@@ -1,22 +1,24 @@
 #include <iostream>
 #include "seblas/operations/cuOperations.cuh"
 #include "seann/seann.cuh"
+#include "seio/data/DataLoader.cuh"
 
 
 using namespace seblas;
 using namespace seann;
 
 int main(int argc, char** argv) {
+
     auto* model = new Sequential({
-        new Conv2D(shape4(3,32,32), shape4(3,3,3,3),1,1,1,1,false),
-        new ReLU(3072),
-        new Conv2D(shape4(3,32,32), shape4(3,3,3,3),1,1,1,1,false),
-        new ReLU(3072),
-        new Conv2D(shape4(3,32,32), shape4(3,3,3,3),2,2,1,1,false),
-        new ReLU(768),
-        new Conv2D(shape4(3,16,16), shape4(3,3,3,3),1,1,1,1,false),
-        new ReLU(768),
-        new Linear(768,768),
+        new Conv2D(shape4(1,28,28), shape4(3,1,3,3),1,1,1,1,false),
+        new ReLU(2352),
+        new Conv2D(shape4(3,28,28), shape4(3,3,3,3),1,1,1,1,false),
+        new ReLU(2352),
+        new Conv2D(shape4(3,28,28), shape4(6,3,3,3),2,2,1,1,false),
+        new ReLU(1176),
+        new Conv2D(shape4(6,14,14), shape4(6,6,3,3),1,1,1,1,false),
+        new ReLU(1176),
+        new Linear(1176,768),
         new ReLU(768),
         new Linear(768,10),
         new Softmax(10)
@@ -29,9 +31,9 @@ int main(int argc, char** argv) {
     model->randInit();
     model->setLoss(CrossEntropyLoss);
 
-    auto* data = Tensor::declare(3,32,32)->create()->randNormal(2,3);
-    inspect(model->forward(data));
-    auto* label = Tensor::declare(10,1)->create()->randNormal(0,0.3);
-    inspect(model->backward(label));
-    model->learn();
+    auto* dataset = Dataset::construct(100,60000,200,shape4(28,28),shape4(10,1));
+    fetchIDX(dataset, R"(D:\Resources\Datasets\mnist-bin\train-images.idx3-ubyte)",784, false);
+    fetchIDX(dataset, R"(D:\Resources\Datasets\mnist-bin\train-labels.idx1-ubyte)",1, true);
+
+
 }

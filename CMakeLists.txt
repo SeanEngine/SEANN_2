@@ -59,7 +59,7 @@ add_executable(SEANN_2
         seann/containers/Sequential.cuh
         seann/seann.cuh
         seann/optimizers/Loss.cuh
-        seann/optimizers/Loss.cu seio/data/Dataset.cu seio/data/Dataset.cuh)
+        seann/optimizers/Loss.cu seio/data/Dataset.cu seio/data/Dataset.cuh seio/data/DataLoader.cu seio/data/DataLoader.cuh)
 
 set_target_properties(SEANN_2 PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON

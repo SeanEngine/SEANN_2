@@ -8,6 +8,9 @@
 #include "../components/Parameter.cuh"
 #include "../operands/OperandBase.cuh"
 #include "../optimizers/Loss.cuh"
+#include "../../seio/data/Dataset.cuh"
+
+using namespace seio;
 
 namespace seann {
     class Sequential {
@@ -51,6 +54,8 @@ namespace seann {
         void learn() const;
 
         void learnBatch() const;
+
+        void train(Dataset* data) const;
     };
 } // seann
 

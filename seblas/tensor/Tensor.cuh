@@ -18,7 +18,7 @@
 #include "../assist/CudaAssert.cuh"
 #include "../../seutil/exec/ThreadController.cuh"
 
-#define CPU_THREADS 12
+#define CPU_THREADS 20
 
 
 using namespace std;

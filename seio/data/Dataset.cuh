@@ -54,15 +54,20 @@ namespace seio {
         Data** dataBatch[2];
 
         //onHost : supports epoch operations
-        vector<Data*> dataset[2];
+        Data** dataset;
 
         uint32 BATCH_SIZE;
         uint32 EPOCH_SIZE;
+        uint32 MAX_EPOCH;
 
         uint32 batchID = 0;
         uint32 epochID = 0;
+        uint32 remainedData;
 
-        static Dataset* construct(uint32 batchSize, uint32 epochSize,
+        shape4 dataShape;
+        shape4 labelShape;
+
+        static Dataset* construct(uint32 batchSize, uint32 epochSize, uint32 maxEpoch,
                                   shape4 dataShape, shape4 labelShape);
 
         //generate a data batch
@@ -71,8 +76,6 @@ namespace seio {
         //this method uses an async way of generating the next batch data
         //while training is running on the current batch
         thread genBatchAsync();
-
-
     };
 }
 
