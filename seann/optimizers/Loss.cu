@@ -4,7 +4,29 @@
 #include "Loss.cuh"
 
 namespace seann{
-    void CrossEntropyLoss(Parameter* Y, Tensor* label){
+
+    __global__ void crossEntropyPrepare(Parameter* Y, Tensor* label, Tensor* buf){
+        uint32 idx = threadIdx.x + blockIdx.x * blockDim.x;
+        if(idx < Y->a->dims.size){
+            float s = Y->a->elements[idx];
+            buf->elements[idx] = label->elements[idx] * (-log(s + 1e-10));
+        }
+    }
+
+    float crossEntropyCalc(Parameter* Y, Tensor* label, Tensor* buf){
+        uint32 block = CUDA_BLOCK_SIZE.y * CUDA_BLOCK_SIZE.x;
+        uint32 grid = (label->dims.size + block - 1) / block;
+
+        crossEntropyPrepare<<<grid, block>>>(Y, label, buf);
+        cudaDeviceSynchronize();
+        assertCuda(__FILE__, __LINE__);
+
+        float out =  reduce(buf, buf);
+        assert(!isnan(out));
+        return out;
+    }
+
+    void crossEntropyLoss(Parameter* Y, Tensor* label){
         Y->a->copyToD2D(Y->grad);
         *Y->grad - label;
     }

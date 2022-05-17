@@ -120,6 +120,8 @@ namespace seio{
         out->dataShape = dataShape;
         out->labelShape = labelShape;
 
+        out->remainedData = out->EPOCH_SIZE;
+
         assertCuda(__FILE__, __LINE__);
 
         return out;

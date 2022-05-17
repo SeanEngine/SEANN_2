@@ -95,7 +95,7 @@ namespace seann {
 
         explicit AdaGrad(float LEARNING_RATE, Parameter* A)
             : Optimizer(LEARNING_RATE, A){
-            V = Tensor::declare(A->grad->dims)->create();
+            V = Tensor::declare(A->grad->dims)->create()->constFill(0);
         }
 
         explicit AdaGrad(float LEARNING_RATE, Parameter* A, float EPSILON)
@@ -107,22 +107,33 @@ namespace seann {
         void batchApply() override{}
     };
 
-    //same as AdaGrad but V[t] = β * V[t-1] + (1 - β) * g[t]^2
-    //also called RMSProp
-    struct AdaDelta : public AdaGrad {
+    /*
+     * Compute Gradient: gt
+     * Accumulate Gradient: E[g^2]t = ρE[g^2]t−1 + (1 − ρ)g^2t
+     * Compute Update: ∆xt = −(RMS[∆x]t−1/RMS[g]t) * gt
+     * Accumulate Updates: E[∆x^2]t = ρE[∆x^2]t−1+(1−ρ)∆x^2t
+     * Update Parameters: x[t+1] = x[t] + ∆xt
+     *
+     * RMS : (E[g^2]t + ε)^(1/2)
+     *
+     * Check Paper: https://arxiv.org/abs/1212.5701
+     */
+    struct AdaDelta : public Optimizer {
     public:
-        float BETA = 0.99;
-
-        explicit AdaDelta(float LEARNING_RATE, Parameter* A)
-            : AdaGrad(LEARNING_RATE, A){}
-
-        explicit AdaDelta(float LEARNING_RATE, Parameter* A, float BETA)
-            : AdaGrad(LEARNING_RATE, A), BETA(BETA){}
+        float BETA = 0.95;
+        float EPSILON = 1e-10;
+        Tensor* V;
+        Tensor* Vx;
 
         explicit AdaDelta(float LEARNING_RATE, Parameter* A, float BETA, float EPSILON)
-            : AdaGrad(LEARNING_RATE, A, EPSILON), BETA(BETA){}
+                : Optimizer(LEARNING_RATE, A), BETA(BETA), EPSILON(EPSILON){
+            V = Tensor::declare(A->grad->dims)->create()->constFill(0);
+            Vx = Tensor::declare(A->grad->dims)->create()->constFill(0);
+        }
 
         void apply() override;
+
+        void batchApply() override{}
     };
 
     //Adaptive Momentum : m[t] = m[t-1] * β1 + (1 - β1) * g[t]
@@ -150,6 +161,8 @@ namespace seann {
         }
 
         void apply() override;
+
+        void batchApply() override{}
     };
 
     //these are the templates used to create optimizer for each updating parameter

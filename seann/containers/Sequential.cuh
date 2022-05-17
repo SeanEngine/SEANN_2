@@ -18,6 +18,7 @@ namespace seann {
         Parameter* netX;
         Parameter* netY;
         LossFunc loss{};
+        LossFuncCalc lossFW{};
 
         //a list of pointers to all the initialized operands
         OperandBase** operands{};
@@ -41,7 +42,7 @@ namespace seann {
 
         void construct(OptimizerInfo* info) const;
 
-        void setLoss(LossFunc loss);
+        void setLoss(LossFunc loss, LossFuncCalc lossFW);
 
         void randInit() const;
 
