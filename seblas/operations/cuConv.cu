@@ -258,8 +258,10 @@ namespace seblas{
             const int REGIS_M, const int REGIS_N>
     __global__ void gemmImplicitBackprop(Tensor* A, Tensor* B, Tensor* C, int strideH, int strideW, int newPadH, int newPadW){
         ///insert parameters
-        const uint32 M = A->dims.n;
-        const uint32 K = A->dims.c * A->dims.h * A->dims.w;
+        //order changed for reversed convolution
+        const uint32 M = A->dims.c;
+        const uint32 K = A->dims.n * A->dims.h * A->dims.w;
+        const uint32 SRC_K = A->dims.c * A->dims.h * A->dims.w;
         const uint32 N = C->dims.n * C->dims.h * C->dims.w;
 
         const uint32 FH = A->dims.h;
@@ -312,10 +314,12 @@ namespace seblas{
 
         #pragma unroll
         for(int i=0; i<BLOCK_M; i+= readRowStrideA){
-            int colIndex = (readColA / (FH * FW)) * (FH * FW) + (FH * FW - 1) - (readColA % (FH * FW));
-            if(blockM + readRowA + i < M && colIndex < K && readColA < K){
+            int rowFilterIndex = readColA / (FH * FW);
+            int colFilterIndex = readRowA + i;
+            int colIndex = (FH * FW - 1) - (readColA % (FH * FW));
+            if(blockM + readRowA + i < M && readColA < K){
                 //rotate 180 degrees
-                tileA[0][readColA][readRowA+i] = ptrA[(readRowA + i)*K + colIndex];
+                tileA[0][readColA][readRowA+i] = ptrA[rowFilterIndex * SRC_K + colFilterIndex * (FH * FW) + colIndex];
             }
         }
 
@@ -364,9 +368,11 @@ namespace seblas{
                 #pragma unroll
                 for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
                     int loadIndex = i / readRowStrideA;
-                    int colIndex = ((readColA + nextTileID)/(FH * FW)) * (FH * FW) + (FH * FW - 1) - ((readColA + nextTileID) % (FH * FW));
-                    bufferA[loadIndex] = blockM + readRowA + i < M && colIndex < K && readColA + nextTileID < K ?
-                                         ptrA[(readRowA + i) * K + colIndex] : 0;
+                    int rowFilterIndex = (readColA + nextTileID) / (FH * FW);
+                    int colFilterIndex = readRowA + i;
+                    int colIndex = (FH * FW - 1) - ((readColA + nextTileID) % (FH * FW));
+                    bufferA[loadIndex] = blockM + readRowA + i < M && readColA + nextTileID < K ?
+                                         ptrA[rowFilterIndex * SRC_K + colFilterIndex * (FH * FW) + colIndex] : 0;
                 }
 
                 #pragma unroll
@@ -705,7 +711,7 @@ namespace seblas{
     Tensor* convDerive(Tensor *A, Tensor *B, Tensor *C, int strideH, int strideW, int padH, int padW) {
         assertConv(A, C, B, strideH, strideW, padH, padW);
 
-        uint32 M = A->dims.n;
+        uint32 M = A->dims.c;
         uint32 N = C->dims.h * C->dims.w * C->dims.n;
 
         int newPadH = (int)(C->dims.h + A->dims.h - 1 - B->dims.h * strideH)/2;

@@ -168,24 +168,31 @@ namespace seann {
             toFloat4R(V->elements[idx]) = toFloat4R(regisV[0]);
             toFloat4R(Vx->elements[idx]) = toFloat4R(regisVx[0]);
             toFloat4R(A->grad->elements[idx]) = toFloat4R(regisG[0]);
-
         }
     }
 
-    __global__ void adamApplyD(Parameter* A, Tensor* m, Tensor* V, float LEARNING_RATE, float EPSILON, float BETA1, float BETA2){
+    __global__ void adamApplyD(Parameter* A, Tensor* m, Tensor* V, float LEARNING_RATE, float EPSILON,
+                               float BETA1, float BETA2, float t){
         uint32 idx = threadIdx.x + blockDim.x * blockIdx.x;
         if(idx < A->a->dims.size){
             float gradVal = A->grad->elements[idx];
             float mVal = BETA1 * m->elements[idx] + (1-BETA1) * gradVal;
             float vVal = BETA2 * V->elements[idx] + (1-BETA2) * gradVal * gradVal;
-            A->a->elements[idx] -= LEARNING_RATE * (mVal / (sqrt(vVal) + EPSILON));
+
+            mVal = mVal / (1-pow(BETA1, t+1));
+            vVal = vVal / (1-pow(BETA2, t+1));
+
+            float update = - LEARNING_RATE * mVal / (sqrt(vVal) + EPSILON);
+
+            A->a->elements[idx] += isnan(update) ? 0 : update;
             m->elements[idx] = mVal;
             V->elements[idx] = vVal;
             A->grad->elements[idx] = 0;
         }
     }
 
-    __global__ void adamApply4D(Parameter* A, Tensor* m, Tensor* V, float LEARNING_RATE, float EPSILON, float BETA1, float BETA2){
+    __global__ void adamApply4D(Parameter* A, Tensor* m, Tensor* V, float LEARNING_RATE, float EPSILON,
+                                float BETA1, float BETA2, float t){
         uint32 idx = (threadIdx.x + blockDim.x * blockIdx.x) * 4;
         float regisA[4] = {0};
         float regisG[4] = {0};
@@ -196,18 +203,37 @@ namespace seann {
             toFloat4R(regisG[0]) = toFloat4R(A->grad->elements[idx]);
             toFloat4R(regisM[0]) = toFloat4R(m->elements[idx]);
             toFloat4R(regisV[0]) = toFloat4R(V->elements[idx]);
+
             regisV[0] = BETA2 * regisV[0] + (1-BETA2) * regisG[0] * regisG[0];
             regisV[1] = BETA2 * regisV[1] + (1-BETA2) * regisG[1] * regisG[1];
             regisV[2] = BETA2 * regisV[2] + (1-BETA2) * regisG[2] * regisG[2];
             regisV[3] = BETA2 * regisV[3] + (1-BETA2) * regisG[3] * regisG[3];
+
             regisM[0] = BETA1 * regisM[0] + (1-BETA1) * regisG[0];
             regisM[1] = BETA1 * regisM[1] + (1-BETA1) * regisG[1];
             regisM[2] = BETA1 * regisM[2] + (1-BETA1) * regisG[2];
             regisM[3] = BETA1 * regisM[3] + (1-BETA1) * regisG[3];
+
+            regisM[0] = regisM[0] / (1-pow(BETA1,t+1));
+            regisM[1] = regisM[1] / (1-pow(BETA1,t+1));
+            regisM[2] = regisM[2] / (1-pow(BETA1,t+1));
+            regisM[3] = regisM[3] / (1-pow(BETA1,t+1));
+
+            regisV[0] = regisV[0] / (1-pow(BETA2,t+1));
+            regisV[1] = regisV[1] / (1-pow(BETA2,t+1));
+            regisV[2] = regisV[2] / (1-pow(BETA2,t+1));
+            regisV[3] = regisV[3] / (1-pow(BETA2,t+1));
+
             regisA[0] -= LEARNING_RATE * regisM[0] / (sqrt(regisV[0]) + EPSILON);
             regisA[1] -= LEARNING_RATE * regisM[1] / (sqrt(regisV[1]) + EPSILON);
             regisA[2] -= LEARNING_RATE * regisM[2] / (sqrt(regisV[2]) + EPSILON);
             regisA[3] -= LEARNING_RATE * regisM[3] / (sqrt(regisV[3]) + EPSILON);
+
+            regisG[0] = 0;
+            regisG[1] = 0;
+            regisG[2] = 0;
+            regisG[3] = 0;
+
             toFloat4R(A->a->elements[idx]) = toFloat4R(regisA[0]);
             toFloat4R(m->elements[idx]) = toFloat4R(regisM[0]);
             toFloat4R(V->elements[idx]) = toFloat4R(regisV[0]);
@@ -222,9 +248,11 @@ namespace seann {
             grid = topOff(A->a->dims.size, block * 4);
             SGDApply4D<<<grid, block>>>(A, LEARNING_RATE);
             assertCuda(__FILE__, __LINE__);
+            cudaDeviceSynchronize();
             return;
         }
         SGDApplyD<<<grid, block>>>(A, LEARNING_RATE);
+        cudaDeviceSynchronize();
         assertCuda(__FILE__, __LINE__);
     }
 
@@ -234,10 +262,12 @@ namespace seann {
         if(A->a->dims.size % 4 == 0){
             grid = topOff(A->a->dims.size, block * 4);
             SGDApply4D<<<grid, block>>>(A, LEARNING_RATE/BATCH_SIZE);
+            cudaDeviceSynchronize();
             assertCuda(__FILE__, __LINE__);
             return;
         }
         SGDApplyD<<<grid, block>>>(A, LEARNING_RATE/BATCH_SIZE);
+        cudaDeviceSynchronize();
         assertCuda(__FILE__, __LINE__);
     }
 
@@ -247,10 +277,12 @@ namespace seann {
         if(A->a->dims.size % 4 == 0){
             grid = topOff(A->a->dims.size, block * 4);
             momentumApply4D<<<grid, block>>>(A, m, LEARNING_RATE, BETA);
+            cudaDeviceSynchronize();
             assertCuda(__FILE__, __LINE__);
             return;
         }
         momentumApplyD<<<grid, block>>>(A, m, LEARNING_RATE, BETA);
+        cudaDeviceSynchronize();
         assertCuda(__FILE__, __LINE__);
     }
 
@@ -260,10 +292,12 @@ namespace seann {
         if(A->a->dims.size % 4 == 0){
             grid = topOff(A->a->dims.size, block * 4);
             adaGradApply4D<<<grid, block>>>(A, V, LEARNING_RATE, EPSILON);
+            cudaDeviceSynchronize();
             assertCuda(__FILE__, __LINE__);
             return;
         }
         adaGradApplyD<<<grid, block>>>(A, V, LEARNING_RATE, EPSILON);
+        cudaDeviceSynchronize();
         assertCuda(__FILE__, __LINE__);
     }
 
@@ -274,24 +308,34 @@ namespace seann {
         if(A->a->dims.size % 4 == 0){
             grid = topOff(A->a->dims.size, block * 4);
             adaDeltaApply4D<<<grid, block>>>(A,  V, Vx, EPSILON, BETA);
+            cudaDeviceSynchronize();
             assertCuda(__FILE__, __LINE__);
             return;
         }
 
         adaDeltaApplyD<<<grid, block>>>(A,  V, Vx, EPSILON, BETA);
+        cudaDeviceSynchronize();
         assertCuda(__FILE__, __LINE__);
     }
 
     void Adam::apply() {
         uint32 block = CUDA_BLOCK_SIZE.x * CUDA_BLOCK_SIZE.y;
         uint32 grid = topOff(A->a->dims.size, block);
+
         if(A->a->dims.size % 4 == 0){
             grid = topOff(A->a->dims.size, block * 4);
-            adamApply4D<<<grid, block>>>(A, m, V, LEARNING_RATE, EPSILON, BETA1, BETA2);
+            adamApply4D<<<grid, block>>>(A, m, V, LEARNING_RATE, EPSILON, BETA1, BETA2,
+                                         (float)t);
+            cudaDeviceSynchronize();
             assertCuda(__FILE__, __LINE__);
+            t++;
             return;
         }
-        adamApplyD<<<grid, block>>>(A, m, V, LEARNING_RATE, EPSILON, BETA1, BETA2);
+
+        adamApplyD<<<grid, block>>>(A, m, V, LEARNING_RATE, EPSILON, BETA1, BETA2,
+                                    (float)t);
+        cudaDeviceSynchronize();
         assertCuda(__FILE__, __LINE__);
+        t++;
     }
 } // seann

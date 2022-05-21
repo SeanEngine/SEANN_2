@@ -83,14 +83,15 @@ namespace seann {
             //training over each sample in the batch
             for(uint32 sampleID = 0; sampleID < data->BATCH_SIZE; sampleID++){
                 forward(data->dataBatch[batchID%2][sampleID]->X);
-                batchLoss += lossFW(netY, data->dataBatch[batchID%2][sampleID]->label, inspection);
-
+                float lossVal = lossFW(netY, data->dataBatch[batchID%2][sampleID]->label, inspection);
+                batchLoss += lossVal;
                 backward(data->dataBatch[batchID%2][sampleID]->label);
                 learn();
             }
 
-            logTrainingProcess(batchID, data->epochID, data->BATCH_SIZE, data->MAX_EPOCH, batchLoss/
-                               data->BATCH_SIZE, -1, -1, -1);
+            if(data->batchID % 20 == 0) cout<<batchLoss/(float)data->BATCH_SIZE<<", ";
+
+            //inspect(operands[4]->Y->a);
 
             //BGD updates
             learnBatch();

@@ -15,7 +15,7 @@ namespace seblas{
     __device__ __forceinline__ float warpReduce(float val){
         #pragma unroll
         for (int mask = WARP_SIZE >> 1; mask > 0; mask >>= 1) {
-            val += __shfl_xor_sync(0x1, val, mask);
+            val += __shfl_xor_sync(0xffffffff, val, mask);
         }
         return val;
     }
@@ -23,8 +23,8 @@ namespace seblas{
     __device__ __forceinline__ float warpCompare(float val) {
         #pragma unroll
         for (int mask = WARP_SIZE >> 1; mask > 0; mask >>= 1) {
-            float temp = __shfl_xor_sync(0x1, val, mask);
-            val = temp > val ? temp : val;
+            float temp = __shfl_xor_sync(0xffffffff, val, mask);
+            val = temp >= val ? temp : val;
         }
         return val;
     }
@@ -136,14 +136,12 @@ namespace seblas{
         uint32 stepID = blockIdx.y;
         uint32 tid = threadIdx.x;
 
-        if(idx >= step) return;
-
         //warp compare :: find the max value in the current warp
         __shared__ float warpCache[BLOCK_WARPS];
         const uint32 warpId = tid / WARP_SIZE;
         const uint32 laneId = tid % WARP_SIZE;
-        float max = A->elements[stepID * step + idx];
-        float val = max;
+        float max = tid < step ? A->elements[stepID * step + idx] : -1e15f;
+        float val = tid < step ? max : 0.0f;
         __syncthreads();
 
         max = warpCompare(max);
@@ -161,7 +159,7 @@ namespace seblas{
 
         //copy the max value to each thread
         max = warpCache[0];
-        val = exp(val - max);
+        val = idx < step ? exp(val - max) : 0.0f;
         float sum = val;
 
         __syncthreads();
@@ -179,14 +177,13 @@ namespace seblas{
 
         __syncthreads();
 
-        val = val / warpCache[0];
-        out->elements[stepID * step + idx] = val;
+        val = val/(warpCache[0] + 1e-10);
+        if(idx < step) out->elements[stepID * step + idx] = val;
     }
 
     template <const uint32 BLOCK_WARPS>
     __global__ void softmax4D4096(Tensor* A, Tensor* out, uint32 step){
         uint32 idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
-        if(idx >= step) return;
 
         uint32 stepID = blockIdx.y;
         uint32 tid = threadIdx.x;
@@ -196,8 +193,8 @@ namespace seblas{
         const uint32 laneId = tid % WARP_SIZE;
 
         float vals[4] = {0};
-        toFloat4R(vals) = toFloat4R(A->elements[stepID * step + idx]);
-        float max = regisMax(vals, 4);
+        if(idx < step) toFloat4R(vals) = toFloat4R(A->elements[stepID * step + idx]);
+        float max = idx < step ?  regisMax(vals, 4) : -1e15f;
         __syncthreads();
 
         max = warpCompare(max);
@@ -217,10 +214,12 @@ namespace seblas{
         max = warpCache[0];
         float sum = 0;
 
-        #pragma unroll
-        for(float & val : vals){
-            val = exp(val - max);
-            sum += val;
+        if(idx < step) {
+            #pragma unroll
+            for (float &val: vals) {
+                val = exp(val - max);
+                sum += val;
+            }
         }
 
         __syncthreads();
@@ -240,9 +239,9 @@ namespace seblas{
 
         #pragma unroll
         for(float & val : vals){
-            val = val / warpCache[0];
+            val = val / (warpCache[0] + 1e-10f);
         }
-        toFloat4R(out->elements[stepID * step + idx]) = toFloat4R(vals);
+        if(idx < step) toFloat4R(out->elements[stepID * step + idx]) = toFloat4R(vals);
     }
 
     //forward the exponentials

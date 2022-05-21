@@ -139,25 +139,31 @@ namespace seann {
     //Adaptive Momentum : m[t] = m[t-1] * β1 + (1 - β1) * g[t]
     //                    V[t] = V[t-1] * β2 + (1 - β2) * g[t]^2
     //                    w[t] = w[t-1] - η * m[t] / (sqrt(V[t]) + ε)
-    struct Adam : public AdaGrad {
+    struct Adam : public Optimizer {
     public:
         float BETA1 = 0.9;
-        float BETA2 = 0.99;
+        float BETA2 = 0.999;
+        float EPSILON = 1e-10;
+        uint32 t = 0;
         Tensor* m;
+        Tensor* V;
 
         explicit Adam(float LEARNING_RATE, Parameter* A)
-            : AdaGrad(LEARNING_RATE, A){
+            : Optimizer(LEARNING_RATE, A){
             m = Tensor::declare(A->grad->dims)->create();
+            V = Tensor::declare(A->grad->dims)->create();
         }
 
         explicit Adam(float LEARNING_RATE, Parameter* A, float BETA1, float BETA2)
-            : AdaGrad(LEARNING_RATE, A), BETA1(BETA1), BETA2(BETA2){
+            : Optimizer(LEARNING_RATE, A), BETA1(BETA1), BETA2(BETA2){
             m = Tensor::declare(A->grad->dims)->create();
+            V = Tensor::declare(A->grad->dims)->create();
         }
 
         explicit Adam(float LEARNING_RATE, Parameter* A, float BETA1, float BETA2, float EPSILON)
-            : AdaGrad(LEARNING_RATE, A, EPSILON), BETA1(BETA1), BETA2(BETA2){
-            m = Tensor::declare(A->grad->dims)->create();
+            : Optimizer(LEARNING_RATE, A), EPSILON(EPSILON), BETA1(BETA1), BETA2(BETA2){
+            m = Tensor::declare(A->grad->dims)->create()->create();
+            V = Tensor::declare(A->grad->dims)->create()->create();
         }
 
         void apply() override;

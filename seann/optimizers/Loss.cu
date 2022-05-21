@@ -9,7 +9,7 @@ namespace seann{
         uint32 idx = threadIdx.x + blockIdx.x * blockDim.x;
         if(idx < Y->a->dims.size){
             float s = Y->a->elements[idx];
-            buf->elements[idx] = label->elements[idx] * (-log(s + 1e-10));
+            buf->elements[idx] = label->elements[idx] * (-log(s + 1e-10f));
         }
     }
 
@@ -22,7 +22,7 @@ namespace seann{
         assertCuda(__FILE__, __LINE__);
 
         float out =  reduce(buf, buf);
-        assert(!isnan(out));
+        buf->constFill(0.0f);
         return out;
     }
 
