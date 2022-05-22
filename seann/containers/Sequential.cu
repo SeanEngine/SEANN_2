@@ -89,7 +89,7 @@ namespace seann {
                 learn();
             }
 
-            if(data->batchID % 20 == 0) cout<<batchLoss/(float)data->BATCH_SIZE<<", ";
+             cout<<batchLoss/(float)data->BATCH_SIZE<<", ";
 
             //inspect(operands[4]->Y->a);
 

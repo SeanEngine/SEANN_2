@@ -10,6 +10,7 @@
 #include "operands/Linear.cuh"
 #include "operands/ReLU.cuh"
 #include "operands/Softmax.cuh"
+#include "operands/MaxPool2D.cuh"
 #include "optimizers/Optimizer.cuh"
 
 namespace seann {
