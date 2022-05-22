@@ -97,7 +97,7 @@ namespace seann {
     }
 
     string MaxPool2D::info() {
-        return "MaxPool2D       { " + X->a->dims.toString() + ", " + Y->a->dims.toString() + " }";
+        return "MaxPool2D     { " + X->a->dims.toString() + ", " + Y->a->dims.toString() + " }";
     }
 
     void MaxPool2D::forward() {

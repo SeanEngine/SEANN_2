@@ -18,6 +18,11 @@ namespace seio {
 
     Dataset* fetchIDX(Dataset* dataset, const char* binPath, uint32 step, bool isLabel);
 
+    //<1 x label><3072 x pixel>
+    //...
+    //<1 x label><3072 x pixel>
+    Dataset* fetchCIFAR(Dataset* dataset, const char* binPath, uint32 fileID);
+
 } // seio
 
 #endif //SEANN_2_DATALOADER_CUH

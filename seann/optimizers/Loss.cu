@@ -30,4 +30,6 @@ namespace seann{
         Y->a->copyToD2D(Y->grad);
         *Y->grad - label;
     }
+
+
 }

@@ -89,9 +89,10 @@ namespace seann {
                 learn();
             }
 
-             cout<<batchLoss/(float)data->BATCH_SIZE<<", ";
-
-            //inspect(operands[4]->Y->a);
+            if(data->batchID % 5 == 0) {
+                //inspect(netY->a);
+                cout << batchLoss / (float) data->BATCH_SIZE << ", ";
+            }
 
             //BGD updates
             learnBatch();

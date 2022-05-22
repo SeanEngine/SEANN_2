@@ -9,19 +9,34 @@ using namespace seann;
 
 int main(int argc, char** argv) {
 
+
     auto* model = new Sequential({
-        new Conv2D(shape4(1,28,28), shape4(6,1,5,5), 1,1,0,0, false),
-        new ReLU(shape4(6,24,24).size),
-        new MaxPool2D(shape4(6,24,24),2,2),
+        /*
+         new Conv2D(shape4(3,32,32), shape4(32,3,3,3), 1,1,1,1, false),
+         new ReLU(shape4(32,32,32).size),
+         new Conv2D(shape4(32,32,32), shape4(32,32,3,3), 1,1,1,1, false),
+         new ReLU(shape4(32,32,32).size),
+         new MaxPool2D(shape4(32,32,32),2,2),
 
-        new Conv2D(shape4(6,12,12),shape4(16,6,5,5),1,1,0,0, false),
-        new ReLU(shape4(16,8,8).size),
-        new MaxPool2D(shape4(16,8,8),2,2),
+         new Conv2D(shape4(32,16,16), shape4(64,32,3,3), 1,1,1,1, false),
+         new ReLU(shape4(64,16,16).size),
+         new Conv2D(shape4(64,16,16), shape4(64,64,3,3), 1,1,1,1, false),
+         new ReLU(shape4(64,16,16).size),
+         new MaxPool2D(shape4(64,16,16),2,2),
 
-        new Linear(256,120),
-        new ReLU(120),
-        new Linear(120,10),
-        new Softmax(10)
+         new Conv2D(shape4(64,8,8), shape4(128,64,3,3), 1,1,1,1, false),
+         new ReLU(shape4(128,8,8).size),
+         new Conv2D(shape4(128,8,8), shape4(128,128,3,3), 1,1,1,1, false),
+         new ReLU(shape4(128,8,8).size),
+         new MaxPool2D(shape4(128,8,8),2,2),
+         */
+
+         new Linear(3072,120),
+         new ReLU(120),
+         new Linear(120,32),
+         new ReLU(32),
+         new Linear(32,10),
+         new Softmax(10)
     });
 
     OptimizerInfo* info = new OPTIMIZER_SGD(0.003);
@@ -31,9 +46,16 @@ int main(int argc, char** argv) {
     model->randInit();
     model->setLoss(crossEntropyLoss, crossEntropyCalc);
 
-    auto* dataset = Dataset::construct(100,60000,100,shape4(28,28),shape4(10,1));
-    fetchIDX(dataset, R"(D:\Resources\Datasets\mnist-bin\train-images.idx3-ubyte)",784, false);
-    fetchIDX(dataset, R"(D:\Resources\Datasets\mnist-bin\train-labels.idx1-ubyte)",1, true);
+    auto* dataset = Dataset::construct(100,50000,100,shape4(3,32,32),shape4(10,1));
+    const char * BASE_PATH = R"(D:\Resources\Datasets\cifar-10-bin\data_batch_)";
+    for(int i = 0; i < 5; i++){
+        string binPath = BASE_PATH + to_string(i+1) + ".bin";
+        fetchCIFAR(dataset, binPath.c_str(), i);
+    }
+
+    //inspect(dataset->dataset[5000]->X);
+    //inspect(dataset->dataset[5000]->label);
 
     model->train(dataset);
+
 }

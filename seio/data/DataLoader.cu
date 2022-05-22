@@ -3,6 +3,8 @@
 //
 
 #include "DataLoader.cuh"
+#include "../../seblas/assist/Inspection.cuh"
+
 #define RGB_DECAY (1.0f/256.0f)
 #define toLittleEndian(i) ((i>>24)&0xFF) | ((i>>8)&0xFF00) | ((i<<8)&0xFF0000) | ((i<<24)&0xFF000000)
 
@@ -81,6 +83,37 @@ namespace seio {
         logDebug(LOG_SEG_SEIO, "Fetched IDX file for : " + to_string(dataset->EPOCH_SIZE) + " items");
 
         cudaFreeHost(buffer);
+        return dataset;
+    }
+
+    void fetchCIFARThread(int tid, int tc, Dataset* set, BYTE* buf, uint32 fileID, uint32 fileItems){
+        int start = tid * (int)(fileItems / tc);
+        int end = tid == tc - 1 ? (int)fileItems : start + (int)(fileItems / tc);
+
+        //CIFAR Dataset keeps files with images and its labels together
+        uint32 step = set->dataShape.size +  1;
+
+        for(uint32 proc = start; proc < end; proc++){
+            uint32 offset = step * proc;
+            auto* lab = fetchOneHotLabel(buf, offset, set->labelShape);
+            auto* dat = fetchBinImage(buf, offset + 1, set->dataShape);
+            set->dataset[fileID * fileItems + proc]->X = dat;
+            set->dataset[fileID * fileItems + proc]->label = lab;
+        }
+    }
+
+    Dataset* fetchCIFAR(Dataset* dataset, const char* binPath, uint32 fileID){
+        BYTE* buffer;
+        unsigned long size = getFileSize(binPath);
+        cudaMallocHost(&buffer, size);
+        readBytes(buffer, size, binPath);
+
+        //all files should be of the same size for CIFAR-10
+        uint32 fileItems = size / (dataset->dataShape.size + 1);
+        logDebug(LOG_SEG_SEIO,"Loading CIFAR file : numItems = " + to_string(fileItems));
+
+        _alloc<1>(fetchCIFARThread, dataset, buffer, fileID, fileItems);
+        logDebug(LOG_SEG_SEIO, "Fetched IDX file for : " + to_string(fileItems) + " items");
         return dataset;
     }
 } // seio
