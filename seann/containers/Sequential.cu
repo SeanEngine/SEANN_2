@@ -90,7 +90,7 @@ namespace seann {
             }
 
             if(data->batchID % 5 == 0) {
-                //inspect(netY->a);
+                //inspect(operands[OPERAND_COUNT-2]->Y->a);
                 cout << batchLoss / (float) data->BATCH_SIZE << ", ";
             }
 
