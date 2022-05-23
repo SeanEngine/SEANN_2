@@ -29,7 +29,6 @@ namespace seann {
                 ->inherit(operands[OPERAND_COUNT-1]->Y);
 
         //bind the layers together
-        //test github accound
         waive();
     }
 
