@@ -15,18 +15,15 @@ namespace seann {
         uint32 INPUT_SIZE;
         uint32 OUTPUT_SIZE;
 
-        Linear(uint32 INPUT_SIZE, uint32 OUTPUT_SIZE){
-            this->INPUT_SIZE = INPUT_SIZE;
+        Linear(uint32 OUTPUT_SIZE){
             this->OUTPUT_SIZE = OUTPUT_SIZE;
-            X = Parameter::declare(INPUT_SIZE, 1);
-            Y = Parameter::create(OUTPUT_SIZE, 1);
         }
 
         string info() override {
             return "Linear        { " + to_string(INPUT_SIZE) + ", " + to_string(OUTPUT_SIZE) + " }";
         }
 
-        void initNetParams(OptimizerInfo *info) override;
+        void initNetParams(OptimizerInfo *info, shape4 inShape) override;
 
         void forward() override;
 

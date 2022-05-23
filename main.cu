@@ -10,24 +10,23 @@ using namespace seann;
 int main(int argc, char** argv) {
 
 
-    auto* model = new Sequential({
+    auto* model = new Sequential(shape4(3,32,32),{
+         new Conv2D(shape4(32,3,3,3), 1,1,1,1, false),
+         new ReLU(),
+         new Conv2D(shape4(32,32,3,3), 1,1,1,1, false),
+         new ReLU(),
+         new MaxPool2D(2,2),
 
-         new Conv2D(shape4(3,32,32), shape4(32,3,3,3), 1,1,1,1, false),
-         new ReLU(shape4(32,32,32).size),
-         new Conv2D(shape4(32,32,32), shape4(32,32,3,3), 1,1,1,1, false),
-         new ReLU(shape4(32,32,32).size),
-         new MaxPool2D(shape4(32,32,32),2,2),
+         new Conv2D(shape4(64,32,3,3), 1,1,1,1, false),
+         new ReLU(),
+         new Conv2D(shape4(64,64,3,3), 1,1,1,1, false),
+         new ReLU(),
+         new MaxPool2D(2,2),
 
-         new Conv2D(shape4(32,16,16), shape4(64,32,3,3), 1,1,1,1, false),
-         new ReLU(shape4(64,16,16).size),
-         new Conv2D(shape4(64,16,16), shape4(64,64,3,3), 1,1,1,1, false),
-         new ReLU(shape4(64,16,16).size),
-         new MaxPool2D(shape4(64,16,16),2,2),
-
-         new Linear(4096,120),
-         new ReLU(120),
-         new Linear(120,10),
-         new Softmax(10)
+         new Linear(120),
+         new ReLU(),
+         new Linear(10),
+         new Softmax()
     });
 
     OptimizerInfo* info = new OPTIMIZER_MOMENTUM(0.003);

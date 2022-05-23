@@ -16,12 +16,17 @@ namespace seann {
         }
     }
 
-    void Sequential::construct(OptimizerInfo* info) const {
+    void Sequential::construct(OptimizerInfo* info) {
         logInfo(seio::LOG_SEG_SEANN, "Constructing Model: ");
         for (int i = 0; i < OPERAND_COUNT; i++) {
-            operands[i]->initNetParams(info);
+            operands[i]->initNetParams(info, i == 0 ? netX->a->dims : operands[i-1]->Y->a->dims);
             logInfo(seio::LOG_SEG_SEANN, operands[i]->info());
         }
+
+        //bind inputs and outputs
+        operands[0]->X->inherit(netX);
+        netY = Parameter::declare(operands[OPERAND_COUNT-1]->Y->a->dims)
+                ->inherit(operands[OPERAND_COUNT-1]->Y);
     }
 
     Tensor* Sequential::forward() const {

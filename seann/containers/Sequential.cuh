@@ -16,7 +16,7 @@ namespace seann {
     class Sequential {
     public:
         Parameter* netX;
-        Parameter* netY;
+        Parameter* netY{};
         LossFunc loss{};
         LossFuncCalc lossFW{};
 
@@ -24,23 +24,18 @@ namespace seann {
         OperandBase** operands{};
         uint32 OPERAND_COUNT;
 
-        Sequential(std::initializer_list<OperandBase*> list){
+        Sequential(shape4 inputShape, std::initializer_list<OperandBase*> list){
             OPERAND_COUNT = list.size();
+            netX = Parameter::create(inputShape);
             cudaMallocHost(&operands, OPERAND_COUNT * sizeof(OperandBase*));
             for(auto i = 0; i < OPERAND_COUNT; i++) {
                 operands[i] = list.begin()[i];
             }
-
-            //bind inputs and outputs
-            netX = Parameter::create(operands[0]->X->a->dims);
-            operands[0]->X->inherit(netX);
-            netY = Parameter::declare(operands[OPERAND_COUNT-1]->Y->a->dims)
-                    ->inherit(operands[OPERAND_COUNT-1]->Y);
         }
 
         void waive() const;
 
-        void construct(OptimizerInfo* info) const;
+        void construct(OptimizerInfo* info);
 
         void setLoss(LossFunc loss, LossFuncCalc lossFW);
 

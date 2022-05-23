@@ -10,19 +10,20 @@
 namespace seann {
     class Softmax : public OperandBase {
     public:
-        uint32 INPUT_SIZE;
-        Tensor* reduceBuffer;
-        explicit Softmax(uint32 INPUT_SIZE) : INPUT_SIZE(INPUT_SIZE) {
-            X = Parameter::declare(INPUT_SIZE, 1);
-            Y = Parameter::create(INPUT_SIZE, 1);
-            reduceBuffer = INPUT_SIZE / 1024 > 0 ? Tensor::declare(INPUT_SIZE,1)->create() : nullptr;
-        }
+        uint32 INPUT_SIZE{};
+        Tensor* reduceBuffer{};
+        Softmax(){}
 
         string info() override {
             return "Softmax       { " + to_string(INPUT_SIZE) + " }";
         }
 
-        void initNetParams(OptimizerInfo *info) override{}
+        void initNetParams(OptimizerInfo *info, shape4 inShape) override{
+            INPUT_SIZE = inShape.size;
+            X = Parameter::declare(INPUT_SIZE, 1);
+            Y = Parameter::create(INPUT_SIZE, 1);
+            reduceBuffer = INPUT_SIZE / 1024 > 0 ? Tensor::declare(INPUT_SIZE,1)->create() : nullptr;
+        }
 
         void forward() override;
 

@@ -17,8 +17,8 @@ namespace seann {
         Parameter* X{};  //input, a shadow of the output of prev operand
         Parameter* Y{};  //output
 
-        OperandBase* prev;
-        OperandBase* next;
+        OperandBase* prev{};
+        OperandBase* next{};
 
         //calculate : X -> Y
         virtual void forward() = 0;
@@ -33,7 +33,7 @@ namespace seann {
         virtual void updateParams() = 0;
         virtual void batchUpdateParams() = 0;
 
-        virtual void initNetParams(OptimizerInfo* info) = 0;
+        virtual void initNetParams(OptimizerInfo* info, shape4 inShape) = 0;
 
         virtual void randFillNetParams() = 0;
 

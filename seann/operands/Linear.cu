@@ -5,7 +5,10 @@
 #include "Linear.cuh"
 
 namespace seann {
-    void Linear::initNetParams(OptimizerInfo *info) {
+    void Linear::initNetParams(OptimizerInfo *info, shape4 inShape) {
+        INPUT_SIZE = inShape.size;
+        X = Parameter::declare(INPUT_SIZE, 1);
+        Y = Parameter::create(OUTPUT_SIZE, 1);
         weights = new NetParam(info, OUTPUT_SIZE, INPUT_SIZE);
         biases = new NetParam(info, OUTPUT_SIZE, 1);
     }
