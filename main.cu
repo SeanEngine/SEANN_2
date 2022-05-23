@@ -8,8 +8,6 @@ using namespace seblas;
 using namespace seann;
 
 int main(int argc, char** argv) {
-
-
     auto* model = new Sequential(shape4(3,32,32),{
          new Conv2D(shape4(32,3,3,3), 1,1,1,1, false),
          new ReLU(),
@@ -32,7 +30,6 @@ int main(int argc, char** argv) {
     OptimizerInfo* info = new OPTIMIZER_MOMENTUM(0.003);
 
     model->construct(info);
-    model->waive();
     model->randInit();
     model->setLoss(crossEntropyLoss, crossEntropyCalc);
 
