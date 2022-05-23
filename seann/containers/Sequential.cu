@@ -27,6 +27,9 @@ namespace seann {
         operands[0]->X->inherit(netX);
         netY = Parameter::declare(operands[OPERAND_COUNT-1]->Y->a->dims)
                 ->inherit(operands[OPERAND_COUNT-1]->Y);
+
+        //bind the layers together
+        waive();
     }
 
     Tensor* Sequential::forward() const {
