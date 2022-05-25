@@ -54,8 +54,6 @@ namespace seblas{
         float bufferB[BLOCK_N * BLOCK_K / threadCount] = {0};
 
         ///prepare configs for reading global
-        float* ptrA = A->elements + blockIdx.y * BLOCK_M * K;
-        float* ptrB = B->elements + blockIdx.x * BLOCK_N;
         const int blockM = blockIdx.y * BLOCK_M;
         const int blockN = blockIdx.x * BLOCK_N;
 
@@ -74,123 +72,133 @@ namespace seblas{
         const int readRowStrideA = threadCount / readThreadPerRowA;
         const int readRowStrideB = threadCount / readThreadPerRowB;
 
+        //This outer loop is special designed for support of batch normalization
+        //allowing linear layers to run samples parallel to each others
         #pragma unroll
-        for(int i=0; i<BLOCK_M; i+= readRowStrideA){
-            if(blockM + readRowA + i < M && readColA < K){
-                tileA[0][readColA][readRowA+i] = ptrA[(readRowA + i)*K + readColA];
-            }
-        }
+        for(uint32 nDim = 0; nDim < B->dims.n; nDim++) {
+            uint32 nShift = nDim * B->dims.h * B->dims.w;
+            float *ptrA = A->elements + blockIdx.y * BLOCK_M * K;
+            float *ptrB = nShift + B->elements + blockIdx.x * BLOCK_N;
 
-        #pragma unroll
-        for(int i=0; i<BLOCK_K; i+= readRowStrideB){
-            if(readRowB + i < K && blockN + readColB < N){
-                tileB[0][readRowB+i][readColB] = ptrB[(readRowB + i)*N + readColB];
-            }
-        }
-        __syncthreads();
-
-        #pragma unroll
-        for(int rm = 0; rm < REGIS_M; rm += 4){
-            toFloat4R(regisA[0][rm]) = toFloat4R(tileA[0][0][REGIS_M * threadIdx.y + rm]);
-        }
-
-        #pragma unroll
-        for(int rn = 0; rn < REGIS_N; rn += 4){
-            toFloat4R(regisB[0][rn]) = toFloat4R(tileB[0][0][REGIS_N * threadIdx.x + rn]);
-        }
-
-        ///main loop
-        int writeStageFlag = 1;
-        #pragma unroll
-        for(int nextTileID = BLOCK_K; nextTileID < K + BLOCK_K; nextTileID+=BLOCK_K) {
-            //prefetch
-            if (nextTileID < K) {
-                #pragma unroll
-                for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
-                    int loadIndex = i / readRowStrideA;
-                    bufferA[loadIndex] = blockM + readRowA + i < M && readColA + nextTileID < K ?
-                                         ptrA[(readRowA + i) * K + readColA + nextTileID] : 0;
-                }
-
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
-                    int loadIndex = i / readRowStrideB;
-                    bufferB[loadIndex] = readRowB + i + nextTileID < K && blockN + readColB < N ?
-                                         ptrB[(readRowB + i + nextTileID) * N + readColB] : 0;
-                }
-            }
-
-            int nextStageFlag = writeStageFlag ^ 1;
-
-            //compute the part that is already in the registers and load the next segment
             #pragma unroll
-            for (int i = 0; i < BLOCK_K - 1; i++) {
+            for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
+                if (blockM + readRowA + i < M && readColA < K) {
+                    tileA[0][readColA][readRowA + i] = ptrA[(readRowA + i) * K + readColA];
+                }
+            }
 
+            #pragma unroll
+            for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                if (readRowB + i < K && blockN + readColB < N) {
+                    tileB[0][readRowB + i][readColB] = ptrB[(readRowB + i) * N + readColB];
+                }
+            }
+            __syncthreads();
+
+            #pragma unroll
+            for (int rm = 0; rm < REGIS_M; rm += 4) {
+                toFloat4R(regisA[0][rm]) = toFloat4R(tileA[0][0][REGIS_M * threadIdx.y + rm]);
+            }
+
+            #pragma unroll
+            for (int rn = 0; rn < REGIS_N; rn += 4) {
+                toFloat4R(regisB[0][rn]) = toFloat4R(tileB[0][0][REGIS_N * threadIdx.x + rn]);
+            }
+
+            ///main loop
+            int writeStageFlag = 1;
+            #pragma unroll
+            for (int nextTileID = BLOCK_K; nextTileID < K + BLOCK_K; nextTileID += BLOCK_K) {
+                //prefetch
+                if (nextTileID < K) {
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
+                        int loadIndex = i / readRowStrideA;
+                        bufferA[loadIndex] = blockM + readRowA + i < M && readColA + nextTileID < K ?
+                                             ptrA[(readRowA + i) * K + readColA + nextTileID] : 0;
+                    }
+
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                        int loadIndex = i / readRowStrideB;
+                        bufferB[loadIndex] = readRowB + i + nextTileID < K && blockN + readColB < N ?
+                                             ptrB[(readRowB + i + nextTileID) * N + readColB] : 0;
+                    }
+                }
+
+                int nextStageFlag = writeStageFlag ^ 1;
+
+                //compute the part that is already in the registers and load the next segment
+                #pragma unroll
+                for (int i = 0; i < BLOCK_K - 1; i++) {
+
+                    #pragma unroll
+                    for (int rm = 0; rm < REGIS_M; rm += 4) {
+                        toFloat4R(regisA[(i + 1) % 2][rm]) = toFloat4R(
+                                tileA[nextStageFlag][i + 1][REGIS_M * threadIdx.y + rm]);
+                    }
+
+                    #pragma unroll
+                    for (int rn = 0; rn < REGIS_N; rn += 4) {
+                        toFloat4R(regisB[(i + 1) % 2][rn]) = toFloat4R(
+                                tileB[nextStageFlag][i + 1][REGIS_N * threadIdx.x + rn]);
+                    }
+
+                    #pragma unroll
+                    for (int rm = 0; rm < REGIS_M; rm++) {
+                        #pragma unroll
+                        for (int rn = 0; rn < REGIS_N; rn++) {
+                            regisC[rm][rn] += regisA[i % 2][rm] * regisB[i % 2][rn];
+                        }
+                    }
+                }
+
+                //load the data in the register buffers to tiles
+                if (nextTileID < K) {
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
+                        int loadIndex = i / readRowStrideA;
+                        tileA[writeStageFlag][readColA][readRowA + i] = bufferA[loadIndex];
+                    }
+
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                        int loadIndex = i / readRowStrideB;
+                        tileB[writeStageFlag][readRowB + i][readColB] = bufferB[loadIndex];
+                    }
+
+                    __syncthreads();
+                    writeStageFlag ^= 1;  //switch
+                }
                 #pragma unroll
                 for (int rm = 0; rm < REGIS_M; rm += 4) {
-                    toFloat4R(regisA[(i + 1) % 2][rm]) = toFloat4R(
-                            tileA[nextStageFlag][i + 1][REGIS_M * threadIdx.y + rm]);
+                    toFloat4R(regisA[0][rm]) = toFloat4R(
+                            tileA[nextStageFlag ^ 1][0][REGIS_M * threadIdx.y + rm]);
                 }
 
                 #pragma unroll
                 for (int rn = 0; rn < REGIS_N; rn += 4) {
-                    toFloat4R(regisB[(i + 1) % 2][rn]) = toFloat4R(
-                            tileB[nextStageFlag][i + 1][REGIS_N * threadIdx.x + rn]);
+                    toFloat4R(regisB[0][rn]) = toFloat4R(
+                            tileB[nextStageFlag ^ 1][0][REGIS_N * threadIdx.x + rn]);
                 }
 
                 #pragma unroll
                 for (int rm = 0; rm < REGIS_M; rm++) {
                     #pragma unroll
                     for (int rn = 0; rn < REGIS_N; rn++) {
-                        regisC[rm][rn] += regisA[i % 2][rm] * regisB[i % 2][rn];
+                        regisC[rm][rn] += regisA[1][rm] * regisB[1][rn];
                     }
                 }
             }
-
-            //load the data in the register buffers to tiles
-            if (nextTileID < K) {
+            #pragma unroll
+            for (int rm = 0; rm < REGIS_M; rm++) {
                 #pragma unroll
-                for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
-                    int loadIndex = i / readRowStrideA;
-                    tileA[writeStageFlag][readColA][readRowA + i] = bufferA[loadIndex];
-                }
-
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
-                    int loadIndex = i / readRowStrideB;
-                    tileB[writeStageFlag][readRowB + i][readColB] = bufferB[loadIndex];
-                }
-
-                __syncthreads();
-                writeStageFlag ^= 1;  //switch
-            }
-            #pragma unroll
-            for (int rm = 0; rm < REGIS_M; rm += 4) {
-                toFloat4R(regisA[0][rm]) = toFloat4R(
-                        tileA[nextStageFlag ^ 1][0][REGIS_M * threadIdx.y + rm]);
-            }
-
-            #pragma unroll
-            for (int rn = 0; rn < REGIS_N; rn += 4) {
-                toFloat4R(regisB[0][rn]) = toFloat4R(
-                        tileB[nextStageFlag ^ 1][0][REGIS_N * threadIdx.x + rn]);
-            }
-
-            #pragma unroll
-            for(int rm = 0; rm < REGIS_M; rm ++){
-                #pragma unroll
-                for(int rn = 0; rn < REGIS_N; rn ++){
-                    regisC[rm][rn] += regisA[1][rm] * regisB[1][rn];
-                }
-            }
-        }
-        #pragma unroll
-        for(int rm = 0; rm < REGIS_M; rm ++){
-            #pragma unroll
-            for(int rn = 0; rn < REGIS_N; rn ++){
-                if((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
-                    C->elements[(blockM + threadIdx.y * REGIS_M + rm) * N
-                                + blockN + threadIdx.x * REGIS_N + rn] = regisC[rm][rn];
+                for (int rn = 0; rn < REGIS_N; rn++) {
+                    if ((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
+                        C->elements[nDim * C->dims.h * C->dims.w + (blockM + threadIdx.y * REGIS_M + rm) * N
+                                    + blockN + threadIdx.x * REGIS_N + rn] = regisC[rm][rn];
+                        regisC[rm][rn] = 0;
+                    }
                 }
             }
         }
@@ -254,127 +262,135 @@ namespace seblas{
         const int readRowStrideA = threadCount / readThreadPerRowA;
         const int readRowStrideB = threadCount / readThreadPerRowB;
 
+        //This outer loop is special designed for support of batch normalization
+        //allowing linear layers to run samples parallel to each others
         #pragma unroll
-        for(int i=0; i<BLOCK_K; i+= readRowStrideA){
-            if(readRowA + i < K && blockM + readColA < M){
-                //The mat A is not transposed since it will be transposed in smem
-                tileA[0][readRowA+i][readColA] = ptrA[(readRowA+i)*M + blockM + readColA];
-            }
-        }
+        for(uint32 nDim = 0; nDim < B->dims.n; nDim++) {
+            uint32 nShift = nDim * B->dims.h * B->dims.w;
 
-        #pragma unroll
-        for(int i=0; i<BLOCK_K; i+= readRowStrideB){
-            if(readRowB + i < K && blockN + readColB < N){
-                tileB[0][readRowB+i][readColB] = ptrB[(readRowB + i)*N + blockN + readColB];
-            }
-        }
-        __syncthreads();
-
-        #pragma unroll
-        for(int rm = 0; rm < REGIS_M; rm += 4){
-            toFloat4R(regisA[0][rm]) = toFloat4R(tileA[0][0][REGIS_M * threadIdx.y + rm]);
-        }
-
-        #pragma unroll
-        for(int rn = 0; rn < REGIS_N; rn += 4){
-            toFloat4R(regisB[0][rn]) = toFloat4R(tileB[0][0][REGIS_N * threadIdx.x + rn]);
-        }
-
-
-        ///main loop
-        int writeStageFlag = 1;
-        #pragma unroll
-        for(int nextTileID = BLOCK_K; nextTileID < K + BLOCK_K; nextTileID+=BLOCK_K) {
-            //prefetch
-            if (nextTileID < K) {
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
-                    int loadIndex = i / readRowStrideA;
-                    //here the mat A is automatially transposed while reading
-                    bufferA[loadIndex] = readRowA + i + nextTileID < K && blockM + readColA < M ?
-                                         ptrA[(readRowA + i + nextTileID) * M + blockM + readColA] : 0;
-                }
-
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
-                    int loadIndex = i / readRowStrideB;
-                    bufferB[loadIndex] = readRowB + i +  nextTileID < K && blockN + readColB < N ?
-                                         ptrB[(readRowB + i + nextTileID) * N + blockN + readColB] : 0;
-                }
-            }
-
-            int nextStageFlag = writeStageFlag ^ 1;
-
-            //compute the part that is already in the registers and load the next segment
             #pragma unroll
-            for (int i = 0; i < BLOCK_K - 1; i++) {
+            for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
+                if (readRowA + i < K && blockM + readColA < M) {
+                    //The mat A is not transposed since it will be transposed in smem
+                    tileA[0][readRowA + i][readColA] = ptrA[(readRowA + i) * M + blockM + readColA];
+                }
+            }
 
+            #pragma unroll
+            for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                if (readRowB + i < K && blockN + readColB < N) {
+                    tileB[0][readRowB + i][readColB] = ptrB[nShift + (readRowB + i) * N + blockN + readColB];
+                }
+            }
+            __syncthreads();
+
+            #pragma unroll
+            for (int rm = 0; rm < REGIS_M; rm += 4) {
+                toFloat4R(regisA[0][rm]) = toFloat4R(tileA[0][0][REGIS_M * threadIdx.y + rm]);
+            }
+
+            #pragma unroll
+            for (int rn = 0; rn < REGIS_N; rn += 4) {
+                toFloat4R(regisB[0][rn]) = toFloat4R(tileB[0][0][REGIS_N * threadIdx.x + rn]);
+            }
+
+
+            ///main loop
+            int writeStageFlag = 1;
+            #pragma unroll
+            for (int nextTileID = BLOCK_K; nextTileID < K + BLOCK_K; nextTileID += BLOCK_K) {
+                //prefetch
+                if (nextTileID < K) {
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
+                        int loadIndex = i / readRowStrideA;
+                        //here the mat A is automatially transposed while reading
+                        bufferA[loadIndex] = readRowA + i + nextTileID < K && blockM + readColA < M ?
+                                             ptrA[(readRowA + i + nextTileID) * M + blockM + readColA] : 0;
+                    }
+
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                        int loadIndex = i / readRowStrideB;
+                        bufferB[loadIndex] = readRowB + i + nextTileID < K && blockN + readColB < N ?
+                                             ptrB[nShift + (readRowB + i + nextTileID) * N + blockN + readColB] : 0;
+                    }
+                }
+
+                int nextStageFlag = writeStageFlag ^ 1;
+
+                //compute the part that is already in the registers and load the next segment
+                #pragma unroll
+                for (int i = 0; i < BLOCK_K - 1; i++) {
+
+                    #pragma unroll
+                    for (int rm = 0; rm < REGIS_M; rm += 4) {
+                        toFloat4R(regisA[(i + 1) % 2][rm]) = toFloat4R(
+                                tileA[nextStageFlag][i + 1][REGIS_M * threadIdx.y + rm]);
+                    }
+
+                    #pragma unroll
+                    for (int rn = 0; rn < REGIS_N; rn += 4) {
+                        toFloat4R(regisB[(i + 1) % 2][rn]) = toFloat4R(
+                                tileB[nextStageFlag][i + 1][REGIS_N * threadIdx.x + rn]);
+                    }
+
+                    #pragma unroll
+                    for (int rm = 0; rm < REGIS_M; rm++) {
+                        #pragma unroll
+                        for (int rn = 0; rn < REGIS_N; rn++) {
+                            regisC[rm][rn] += regisA[i % 2][rm] * regisB[i % 2][rn];
+                        }
+                    }
+                }
+
+                //load the data in the register buffers to tiles
+                if (nextTileID < K) {
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
+                        int loadIndex = i / readRowStrideA;
+                        tileA[writeStageFlag][readRowA + i][readColA] = bufferA[loadIndex];
+                    }
+
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                        int loadIndex = i / readRowStrideB;
+                        tileB[writeStageFlag][readRowB + i][readColB] = bufferB[loadIndex];
+                    }
+
+                    __syncthreads();
+                    writeStageFlag ^= 1;  //switch
+                }
                 #pragma unroll
                 for (int rm = 0; rm < REGIS_M; rm += 4) {
-                    toFloat4R(regisA[(i + 1) % 2][rm]) = toFloat4R(
-                            tileA[nextStageFlag][i + 1][REGIS_M * threadIdx.y + rm]);
+                    toFloat4R(regisA[0][rm]) = toFloat4R(
+                            tileA[nextStageFlag ^ 1][0][REGIS_M * threadIdx.y + rm]);
                 }
 
                 #pragma unroll
                 for (int rn = 0; rn < REGIS_N; rn += 4) {
-                    toFloat4R(regisB[(i + 1) % 2][rn]) = toFloat4R(
-                            tileB[nextStageFlag][i + 1][REGIS_N * threadIdx.x + rn]);
+                    toFloat4R(regisB[0][rn]) = toFloat4R(
+                            tileB[nextStageFlag ^ 1][0][REGIS_N * threadIdx.x + rn]);
                 }
 
                 #pragma unroll
                 for (int rm = 0; rm < REGIS_M; rm++) {
                     #pragma unroll
                     for (int rn = 0; rn < REGIS_N; rn++) {
-                        regisC[rm][rn] += regisA[i % 2][rm] * regisB[i % 2][rn];
+                        regisC[rm][rn] += regisA[1][rm] * regisB[1][rn];
                     }
                 }
             }
 
-            //load the data in the register buffers to tiles
-            if (nextTileID < K) {
+            #pragma unroll
+            for (int rm = 0; rm < REGIS_M; rm++) {
                 #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
-                    int loadIndex = i / readRowStrideA;
-                    tileA[writeStageFlag][readRowA + i][readColA] = bufferA[loadIndex];
-                }
-
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
-                    int loadIndex = i / readRowStrideB;
-                    tileB[writeStageFlag][readRowB + i][readColB] = bufferB[loadIndex];
-                }
-
-                __syncthreads();
-                writeStageFlag ^= 1;  //switch
-            }
-            #pragma unroll
-            for (int rm = 0; rm < REGIS_M; rm += 4) {
-                toFloat4R(regisA[0][rm]) = toFloat4R(
-                        tileA[nextStageFlag ^ 1][0][REGIS_M * threadIdx.y + rm]);
-            }
-
-            #pragma unroll
-            for (int rn = 0; rn < REGIS_N; rn += 4) {
-                toFloat4R(regisB[0][rn]) = toFloat4R(
-                        tileB[nextStageFlag ^ 1][0][REGIS_N * threadIdx.x + rn]);
-            }
-
-            #pragma unroll
-            for(int rm = 0; rm < REGIS_M; rm ++){
-                #pragma unroll
-                for(int rn = 0; rn < REGIS_N; rn ++){
-                    regisC[rm][rn] += regisA[1][rm] * regisB[1][rn];
-                }
-            }
-        }
-
-        #pragma unroll
-        for(int rm = 0; rm < REGIS_M; rm ++){
-            #pragma unroll
-            for(int rn = 0; rn < REGIS_N; rn ++){
-                if((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
-                    C->elements[(blockM + threadIdx.y * REGIS_M + rm) * N
-                                + blockN + threadIdx.x * REGIS_N + rn] = regisC[rm][rn];
+                for (int rn = 0; rn < REGIS_N; rn++) {
+                    if ((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
+                        C->elements[nDim * M * N + (blockM + threadIdx.y * REGIS_M + rm) * N
+                                    + blockN + threadIdx.x * REGIS_N + rn] = regisC[rm][rn];
+                        regisC[rm][rn] = 0;
+                    }
                 }
             }
         }
@@ -766,8 +782,6 @@ namespace seblas{
         float bufferB[BLOCK_N * BLOCK_K / threadCount] = {0};
 
         ///prepare configs for reading global
-        float* ptrA = A->elements + blockIdx.y * BLOCK_M * K;
-        float* ptrB = B->elements + blockIdx.x * BLOCK_N;
         const int blockM = blockIdx.y * BLOCK_M;
         const int blockN = blockIdx.x * BLOCK_N;
 
@@ -786,149 +800,158 @@ namespace seblas{
         const int readRowStrideA = threadCount / readThreadPerRowA;
         const int readRowStrideB = threadCount / readThreadPerRowB;
 
-
-        ///prefetch the first smem and register block before starting the main loop
         #pragma unroll
-        for(int i = 0; i < BLOCK_M; i+=readRowStrideA){
-            int loadIndex = i / readRowStrideA * 4;
-            if(blockM + readRowA + i < M && readColA < K) {
-                toFloat4R(bufferA[loadIndex]) = toFloat4R(ptrA[(readRowA + i) * K + readColA]);
-                //transpose
-                tileA[0][readColA][readRowA + i] = bufferA[loadIndex];
-                tileA[0][readColA + 1][readRowA + i] = bufferA[loadIndex + 1];
-                tileA[0][readColA + 2][readRowA + i] = bufferA[loadIndex + 2];
-                tileA[0][readColA + 3][readRowA + i] = bufferA[loadIndex + 3];
-            }
-        }
-
-        #pragma unroll
-        for(int i = 0; i < BLOCK_K; i+=readRowStrideB){
-            if(readRowB + i < K && blockN + readColB < N){
-                toFloat4R(tileB[0][readRowB + i][readColB]) = toFloat4R(ptrB[(readRowB + i) * N + readColB]);
-            }
-        }
-        __syncthreads();
-
-        #pragma unroll
-        for(int rm = 0; rm < REGIS_M; rm += 4){
-            toFloat4R(regisA[0][rm]) = toFloat4R(tileA[0][0][REGIS_M * threadIdx.y + rm]);
-        }
-
-        #pragma unroll
-        for(int rn = 0; rn < REGIS_N; rn += 4){
-            toFloat4R(regisB[0][rn]) = toFloat4R(tileB[0][0][REGIS_N * threadIdx.x + rn]);
-        }
-
-        ///main loop
-        int writeStageFlag = 1;
-        #pragma unroll
-        for(int nextTileID = BLOCK_K; nextTileID < K + BLOCK_K; nextTileID+=BLOCK_K){
-            //prefetch
-            if(nextTileID < K) {
-                #pragma unroll
-                for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
-                    int loadIndex = i / readRowStrideA * 4;
-                    if (blockM + readRowA + i < M && readColA + nextTileID < K) {
-                        toFloat4R(bufferA[loadIndex]) = toFloat4R(
-                                ptrA[(readRowA + i) * K + readColA + nextTileID]);
-                    }else{
-                        bufferA[loadIndex] = 0;
-                        bufferA[loadIndex+1] = 0;
-                        bufferA[loadIndex+2] = 0;
-                        bufferA[loadIndex+3] = 0;
-                    }
-                }
-
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
-                    int loadIndex = i / readRowStrideB * 4;
-                    if (readRowB + i + nextTileID < K && blockN + readColB < N) {
-                        toFloat4R(bufferB[loadIndex]) = toFloat4R(
-                                ptrB[(readRowB + i + nextTileID) * N + readColB]);
-                    } else {
-                        bufferB[loadIndex] = 0;
-                        bufferB[loadIndex+1] = 0;
-                        bufferB[loadIndex+2] = 0;
-                        bufferB[loadIndex+3] = 0;
-                    }
-                }
-            }
-
-            int nextStageFlag = writeStageFlag ^ 1;
-
-            //compute the part that is already in the registers and load the next segment
+        for(uint32 nDim = 0; nDim < B->dims.n; nDim++) {
+            uint32 nShift = nDim * K * N;
+            float* ptrA = A->elements + blockIdx.y * BLOCK_M * K;
+            float* ptrB = nShift + B->elements + blockIdx.x * BLOCK_N;
+            ///prefetch the first smem and register block before starting the main loop
             #pragma unroll
-            for(int i = 0; i < BLOCK_K-1; i++){
-                #pragma unroll
-                for (int rm = 0; rm < REGIS_M; rm += 4) {
-                    toFloat4R(regisA[(i + 1) % 2][rm]) = toFloat4R(
-                            tileA[nextStageFlag][i + 1][REGIS_M * threadIdx.y + rm]);
-                }
-
-                #pragma unroll
-                for (int rn = 0; rn < REGIS_N; rn += 4) {
-                    toFloat4R(regisB[(i + 1) % 2][rn]) = toFloat4R(
-                            tileB[nextStageFlag][i + 1][REGIS_N * threadIdx.x + rn]);
-                }
-
-                #pragma unroll
-                for(int rm = 0; rm < REGIS_M; rm ++){
-                    #pragma unroll
-                    for(int rn = 0; rn < REGIS_N; rn ++){
-                        regisC[rm][rn] += regisA[i%2][rm] * regisB[i%2][rn];
-                    }
+            for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
+                int loadIndex = i / readRowStrideA * 4;
+                if (blockM + readRowA + i < M && readColA < K) {
+                    toFloat4R(bufferA[loadIndex]) = toFloat4R(ptrA[(readRowA + i) * K + readColA]);
+                    //transpose
+                    tileA[0][readColA][readRowA + i] = bufferA[loadIndex];
+                    tileA[0][readColA + 1][readRowA + i] = bufferA[loadIndex + 1];
+                    tileA[0][readColA + 2][readRowA + i] = bufferA[loadIndex + 2];
+                    tileA[0][readColA + 3][readRowA + i] = bufferA[loadIndex + 3];
                 }
             }
 
-            //load the data in the register buffers to tiles
-            if(nextTileID < K){
-                #pragma unroll
-                for(int i=0; i<BLOCK_M; i+=readRowStrideA){
-                    int loadIndex = i/readRowStrideA * 4;
-                    tileA[writeStageFlag][readColA][readRowA + i] = bufferA[loadIndex];
-                    tileA[writeStageFlag][readColA + 1][readRowA + i] = bufferA[loadIndex + 1];
-                    tileA[writeStageFlag][readColA + 2][readRowA + i] = bufferA[loadIndex + 2];
-                    tileA[writeStageFlag][readColA + 3][readRowA + i] = bufferA[loadIndex + 3];
+            #pragma unroll
+            for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                if (readRowB + i < K && blockN + readColB < N) {
+                    toFloat4R(tileB[0][readRowB + i][readColB]) = toFloat4R(ptrB[(readRowB + i) * N + readColB]);
                 }
-
-                #pragma unroll
-                for(int i = 0; i < BLOCK_K; i+=readRowStrideB){
-                    int loadIndex = i/readRowStrideA * 4;
-                    toFloat4R(tileB[writeStageFlag][readRowB + i][readColB]) = toFloat4R(bufferB[loadIndex]);
-                }
-
-                __syncthreads();
-                writeStageFlag ^= 1;  //switch
             }
+            __syncthreads();
 
             #pragma unroll
             for (int rm = 0; rm < REGIS_M; rm += 4) {
-                toFloat4R(regisA[0][rm]) = toFloat4R(
-                        tileA[nextStageFlag ^ 1][0][REGIS_M * threadIdx.y + rm]);
+                toFloat4R(regisA[0][rm]) = toFloat4R(tileA[0][0][REGIS_M * threadIdx.y + rm]);
             }
 
             #pragma unroll
             for (int rn = 0; rn < REGIS_N; rn += 4) {
-                toFloat4R(regisB[0][rn]) = toFloat4R(
-                        tileB[nextStageFlag ^ 1][0][REGIS_N * threadIdx.x + rn]);
+                toFloat4R(regisB[0][rn]) = toFloat4R(tileB[0][0][REGIS_N * threadIdx.x + rn]);
             }
 
+            ///main loop
+            int writeStageFlag = 1;
             #pragma unroll
-            for(int rm = 0; rm < REGIS_M; rm ++){
+            for (int nextTileID = BLOCK_K; nextTileID < K + BLOCK_K; nextTileID += BLOCK_K) {
+                //prefetch
+                if (nextTileID < K) {
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
+                        int loadIndex = i / readRowStrideA * 4;
+                        if (blockM + readRowA + i < M && readColA + nextTileID < K) {
+                            toFloat4R(bufferA[loadIndex]) = toFloat4R(
+                                    ptrA[(readRowA + i) * K + readColA + nextTileID]);
+                        } else {
+                            bufferA[loadIndex] = 0;
+                            bufferA[loadIndex + 1] = 0;
+                            bufferA[loadIndex + 2] = 0;
+                            bufferA[loadIndex + 3] = 0;
+                        }
+                    }
+
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                        int loadIndex = i / readRowStrideB * 4;
+                        if (readRowB + i + nextTileID < K && blockN + readColB < N) {
+                            toFloat4R(bufferB[loadIndex]) = toFloat4R(
+                                    ptrB[(readRowB + i + nextTileID) * N + readColB]);
+                        } else {
+                            bufferB[loadIndex] = 0;
+                            bufferB[loadIndex + 1] = 0;
+                            bufferB[loadIndex + 2] = 0;
+                            bufferB[loadIndex + 3] = 0;
+                        }
+                    }
+                }
+
+                int nextStageFlag = writeStageFlag ^ 1;
+
+                //compute the part that is already in the registers and load the next segment
                 #pragma unroll
-                for(int rn = 0; rn < REGIS_N; rn ++){
-                    regisC[rm][rn] += regisA[1][rm] * regisB[1][rn];
+                for (int i = 0; i < BLOCK_K - 1; i++) {
+                    #pragma unroll
+                    for (int rm = 0; rm < REGIS_M; rm += 4) {
+                        toFloat4R(regisA[(i + 1) % 2][rm]) = toFloat4R(
+                                tileA[nextStageFlag][i + 1][REGIS_M * threadIdx.y + rm]);
+                    }
+
+                    #pragma unroll
+                    for (int rn = 0; rn < REGIS_N; rn += 4) {
+                        toFloat4R(regisB[(i + 1) % 2][rn]) = toFloat4R(
+                                tileB[nextStageFlag][i + 1][REGIS_N * threadIdx.x + rn]);
+                    }
+
+                    #pragma unroll
+                    for (int rm = 0; rm < REGIS_M; rm++) {
+                        #pragma unroll
+                        for (int rn = 0; rn < REGIS_N; rn++) {
+                            regisC[rm][rn] += regisA[i % 2][rm] * regisB[i % 2][rn];
+                        }
+                    }
+                }
+
+                //load the data in the register buffers to tiles
+                if (nextTileID < K) {
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
+                        int loadIndex = i / readRowStrideA * 4;
+                        tileA[writeStageFlag][readColA][readRowA + i] = bufferA[loadIndex];
+                        tileA[writeStageFlag][readColA + 1][readRowA + i] = bufferA[loadIndex + 1];
+                        tileA[writeStageFlag][readColA + 2][readRowA + i] = bufferA[loadIndex + 2];
+                        tileA[writeStageFlag][readColA + 3][readRowA + i] = bufferA[loadIndex + 3];
+                    }
+
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                        int loadIndex = i / readRowStrideA * 4;
+                        toFloat4R(tileB[writeStageFlag][readRowB + i][readColB]) = toFloat4R(bufferB[loadIndex]);
+                    }
+
+                    __syncthreads();
+                    writeStageFlag ^= 1;  //switch
+                }
+
+                #pragma unroll
+                for (int rm = 0; rm < REGIS_M; rm += 4) {
+                    toFloat4R(regisA[0][rm]) = toFloat4R(
+                            tileA[nextStageFlag ^ 1][0][REGIS_M * threadIdx.y + rm]);
+                }
+
+                #pragma unroll
+                for (int rn = 0; rn < REGIS_N; rn += 4) {
+                    toFloat4R(regisB[0][rn]) = toFloat4R(
+                            tileB[nextStageFlag ^ 1][0][REGIS_N * threadIdx.x + rn]);
+                }
+
+                #pragma unroll
+                for (int rm = 0; rm < REGIS_M; rm++) {
+                    #pragma unroll
+                    for (int rn = 0; rn < REGIS_N; rn++) {
+                        regisC[rm][rn] += regisA[1][rm] * regisB[1][rn];
+                    }
                 }
             }
-        }
 
-        #pragma unroll
-        for(int rm = 0; rm < REGIS_M; rm ++){
             #pragma unroll
-            for(int rn = 0; rn < REGIS_N; rn += 4){
-                if((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
-                    toFloat4R(C->elements[(blockM + threadIdx.y * REGIS_M + rm) * N
-                                          + blockN + threadIdx.x * REGIS_N + rn]) = toFloat4R(regisC[rm][rn]);
+            for (int rm = 0; rm < REGIS_M; rm++) {
+                #pragma unroll
+                for (int rn = 0; rn < REGIS_N; rn += 4) {
+                    if ((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
+                        toFloat4R(C->elements[nDim * M * N + (blockM + threadIdx.y * REGIS_M + rm) * N
+                                              + blockN + threadIdx.x * REGIS_N + rn]) = toFloat4R(regisC[rm][rn]);
+                        regisC[rm][rn] = 0;
+                        regisC[rm][rn + 1] = 0;
+                        regisC[rm][rn + 2] = 0;
+                        regisC[rm][rn + 3] = 0;
+                    }
                 }
             }
         }
@@ -991,140 +1014,150 @@ namespace seblas{
         const int readRowStrideA = threadCount / readThreadPerRowA;
         const int readRowStrideB = threadCount / readThreadPerRowB;
 
-        #pragma unroll
-        for(int i=0; i<BLOCK_K; i+= readRowStrideA){
-            if(readRowA + i < K && blockM + readColA < M){
-                //The mat A is not transposed since it will be transposed in smem
-                toFloat4R(tileA[0][readRowA+i][readColA]) = toFloat4R(ptrA[(readRowA+i)*M + blockM + readColA]);
-            }
-        }
-
-        #pragma unroll
-        for(int i=0; i<BLOCK_K; i+= readRowStrideB){
-            if(readRowB + i< K && blockN + readColB < N){
-                toFloat4R(tileB[0][readRowB+i][readColB]) = toFloat4R(ptrB[(readRowB + i)*N + blockN + readColB]);
-            }
-        }
-        __syncthreads();
-
-        #pragma unroll
-        for(int rm = 0; rm < REGIS_M; rm += 4){
-            toFloat4R(regisA[0][rm]) = toFloat4R(tileA[0][0][REGIS_M * threadIdx.y + rm]);
-        }
-
-        #pragma unroll
-        for(int rn = 0; rn < REGIS_N; rn += 4){
-            toFloat4R(regisB[0][rn]) = toFloat4R(tileB[0][0][REGIS_N * threadIdx.x + rn]);
-        }
-
-
-        ///main loop
-        int writeStageFlag = 1;
-        #pragma unroll
-        for(int nextTileID = BLOCK_K; nextTileID < K + BLOCK_K; nextTileID+=BLOCK_K) {
-            //prefetch
-            if (nextTileID < K) {
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
-                    int loadIndex = i / readRowStrideA * 4;
-                    //here the mat A is automatially transposed while reading
-                    if(readRowA + i + nextTileID < K && blockM + readColA < M ){
-                        toFloat4R(bufferA[loadIndex]) = toFloat4R(
-                                ptrA[(readRowA + i + nextTileID) * M + blockM + readColA]);
-                    }else{
-                        bufferA[loadIndex] = 0;
-                        bufferA[loadIndex + 1] = 0;
-                        bufferA[loadIndex + 2] = 0;
-                        bufferA[loadIndex + 3] = 0;
-                    }
-                }
-
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
-                    int loadIndex = i / readRowStrideB * 4;
-                    if(readRowB + i +  nextTileID < K && blockN + readColB < N){
-                        toFloat4R(bufferB[loadIndex]) = toFloat4R(
-                                ptrB[(readRowB + i + nextTileID) * N + blockN + readColB]);
-                    }else{
-                        bufferB[loadIndex] = 0;
-                        bufferB[loadIndex + 1] = 0;
-                        bufferB[loadIndex + 2] = 0;
-                        bufferB[loadIndex + 3] = 0;
-                    }
-                }
-            }
-
-            int nextStageFlag = writeStageFlag ^ 1;
-
-            //compute the part that is already in the registers and load the next segment
+        for(uint32 nDim = 0; nDim < B->dims.n; nDim++) {
+            uint32 nShift = nDim * K * N;
             #pragma unroll
-            for (int i = 0; i < BLOCK_K - 1; i++) {
+            for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
+                if (readRowA + i < K && blockM + readColA < M) {
+                    //The mat A is not transposed since it will be transposed in smem
+                    toFloat4R(tileA[0][readRowA + i][readColA]) = toFloat4R(
+                            ptrA[(readRowA + i) * M + blockM + readColA]);
+                }
+            }
+
+            #pragma unroll
+            for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                if (readRowB + i < K && blockN + readColB < N) {
+                    toFloat4R(tileB[0][readRowB + i][readColB]) = toFloat4R(
+                            ptrB[nShift + (readRowB + i) * N + blockN + readColB]);
+                }
+            }
+            __syncthreads();
+
+            #pragma unroll
+            for (int rm = 0; rm < REGIS_M; rm += 4) {
+                toFloat4R(regisA[0][rm]) = toFloat4R(tileA[0][0][REGIS_M * threadIdx.y + rm]);
+            }
+
+            #pragma unroll
+            for (int rn = 0; rn < REGIS_N; rn += 4) {
+                toFloat4R(regisB[0][rn]) = toFloat4R(tileB[0][0][REGIS_N * threadIdx.x + rn]);
+            }
+
+
+            ///main loop
+            int writeStageFlag = 1;
+            #pragma unroll
+            for (int nextTileID = BLOCK_K; nextTileID < K + BLOCK_K; nextTileID += BLOCK_K) {
+                //prefetch
+                if (nextTileID < K) {
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
+                        int loadIndex = i / readRowStrideA * 4;
+                        //here the mat A is automatially transposed while reading
+                        if (readRowA + i + nextTileID < K && blockM + readColA < M) {
+                            toFloat4R(bufferA[loadIndex]) = toFloat4R(
+                                    ptrA[(readRowA + i + nextTileID) * M + blockM + readColA]);
+                        } else {
+                            bufferA[loadIndex] = 0;
+                            bufferA[loadIndex + 1] = 0;
+                            bufferA[loadIndex + 2] = 0;
+                            bufferA[loadIndex + 3] = 0;
+                        }
+                    }
+
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                        int loadIndex = i / readRowStrideB * 4;
+                        if (readRowB + i + nextTileID < K && blockN + readColB < N) {
+                            toFloat4R(bufferB[loadIndex]) = toFloat4R(
+                                    ptrB[nShift + (readRowB + i + nextTileID) * N + blockN + readColB]);
+                        } else {
+                            bufferB[loadIndex] = 0;
+                            bufferB[loadIndex + 1] = 0;
+                            bufferB[loadIndex + 2] = 0;
+                            bufferB[loadIndex + 3] = 0;
+                        }
+                    }
+                }
+
+                int nextStageFlag = writeStageFlag ^ 1;
+
+                //compute the part that is already in the registers and load the next segment
+                #pragma unroll
+                for (int i = 0; i < BLOCK_K - 1; i++) {
+                    #pragma unroll
+                    for (int rm = 0; rm < REGIS_M; rm += 4) {
+                        toFloat4R(regisA[(i + 1) % 2][rm]) = toFloat4R(
+                                tileA[nextStageFlag][i + 1][REGIS_M * threadIdx.y + rm]);
+                    }
+
+                    #pragma unroll
+                    for (int rn = 0; rn < REGIS_N; rn += 4) {
+                        toFloat4R(regisB[(i + 1) % 2][rn]) = toFloat4R(
+                                tileB[nextStageFlag][i + 1][REGIS_N * threadIdx.x + rn]);
+                    }
+
+                    #pragma unroll
+                    for (int rm = 0; rm < REGIS_M; rm++) {
+                        #pragma unroll
+                        for (int rn = 0; rn < REGIS_N; rn++) {
+                            regisC[rm][rn] += regisA[i % 2][rm] * regisB[i % 2][rn];
+                        }
+                    }
+                }
+
+                //load the data in the register buffers to tiles
+                if (nextTileID < K) {
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
+                        int loadIndex = i / readRowStrideA * 4;
+                        toFloat4R(tileA[writeStageFlag][readRowA + i][readColA]) = toFloat4R(bufferA[loadIndex]);
+                    }
+
+                    #pragma unroll
+                    for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
+                        int loadIndex = i / readRowStrideB * 4;
+                        toFloat4R(tileB[writeStageFlag][readRowB + i][readColB]) = toFloat4R(bufferB[loadIndex]);
+                    }
+
+                    __syncthreads();
+                    writeStageFlag ^= 1;  //switch
+                }
                 #pragma unroll
                 for (int rm = 0; rm < REGIS_M; rm += 4) {
-                    toFloat4R(regisA[(i + 1) % 2][rm]) = toFloat4R(
-                            tileA[nextStageFlag][i + 1][REGIS_M * threadIdx.y + rm]);
+                    toFloat4R(regisA[0][rm]) = toFloat4R(
+                            tileA[nextStageFlag ^ 1][0][REGIS_M * threadIdx.y + rm]);
                 }
 
                 #pragma unroll
                 for (int rn = 0; rn < REGIS_N; rn += 4) {
-                    toFloat4R(regisB[(i + 1) % 2][rn]) = toFloat4R(
-                            tileB[nextStageFlag][i + 1][REGIS_N * threadIdx.x + rn]);
+                    toFloat4R(regisB[0][rn]) = toFloat4R(
+                            tileB[nextStageFlag ^ 1][0][REGIS_N * threadIdx.x + rn]);
                 }
 
                 #pragma unroll
                 for (int rm = 0; rm < REGIS_M; rm++) {
                     #pragma unroll
                     for (int rn = 0; rn < REGIS_N; rn++) {
-                        regisC[rm][rn] += regisA[i % 2][rm] * regisB[i % 2][rn];
+                        regisC[rm][rn] += regisA[1][rm] * regisB[1][rn];
                     }
                 }
             }
 
-            //load the data in the register buffers to tiles
-            if (nextTileID < K) {
+            #pragma unroll
+            for (int rm = 0; rm < REGIS_M; rm++) {
                 #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideA) {
-                    int loadIndex = i / readRowStrideA * 4;
-                    toFloat4R(tileA[writeStageFlag][readRowA + i][readColA]) = toFloat4R(bufferA[loadIndex]);
-                }
-
-                #pragma unroll
-                for (int i = 0; i < BLOCK_K; i += readRowStrideB) {
-                    int loadIndex = i / readRowStrideB * 4;
-                    toFloat4R(tileB[writeStageFlag][readRowB + i][readColB]) = toFloat4R(bufferB[loadIndex]);
-                }
-
-                __syncthreads();
-                writeStageFlag ^= 1;  //switch
-            }
-            #pragma unroll
-            for (int rm = 0; rm < REGIS_M; rm += 4) {
-                toFloat4R(regisA[0][rm]) = toFloat4R(
-                        tileA[nextStageFlag ^ 1][0][REGIS_M * threadIdx.y + rm]);
-            }
-
-            #pragma unroll
-            for (int rn = 0; rn < REGIS_N; rn += 4) {
-                toFloat4R(regisB[0][rn]) = toFloat4R(
-                        tileB[nextStageFlag ^ 1][0][REGIS_N * threadIdx.x + rn]);
-            }
-
-            #pragma unroll
-            for(int rm = 0; rm < REGIS_M; rm ++){
-                #pragma unroll
-                for(int rn = 0; rn < REGIS_N; rn ++){
-                    regisC[rm][rn] += regisA[1][rm] * regisB[1][rn];
-                }
-            }
-        }
-
-        #pragma unroll
-        for(int rm = 0; rm < REGIS_M; rm ++){
-            #pragma unroll
-            for(int rn = 0; rn < REGIS_N; rn += 4){
-                if((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
-                    toFloat4R(C[(blockM + threadIdx.y * REGIS_M + rm) * N + blockN + threadIdx.x * REGIS_N + rn])
-                            = toFloat4R(regisC[rm][rn]);
+                for (int rn = 0; rn < REGIS_N; rn += 4) {
+                    if ((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
+                        toFloat4R(C->elements[nDim * M * N + (blockM + threadIdx.y * REGIS_M + rm) * N +
+                                blockN + threadIdx.x * REGIS_N + rn])
+                                = toFloat4R(regisC[rm][rn]);
+                        regisC[rm][rn] = 0;
+                        regisC[rm][rn + 1] = 0;
+                        regisC[rm][rn + 2] = 0;
+                        regisC[rm][rn + 3] = 0;
+                    }
                 }
             }
         }

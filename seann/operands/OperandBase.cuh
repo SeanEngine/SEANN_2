@@ -48,6 +48,15 @@ namespace seann {
         void bindNext(OperandBase* nextPtr) {
             this->next = nextPtr;
         }
+
+        //grab the operands earlier in the network
+        OperandBase* tracePrev(uint32 ago){
+            return ago <= 0 ? this : prev->tracePrev(ago - 1);
+        }
+
+        OperandBase* traceNext(uint32 dist){
+            return dist <= 0 ? this : next->traceNext(dist-1);
+        }
     };
 }
 

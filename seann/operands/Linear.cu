@@ -6,9 +6,9 @@
 
 namespace seann {
     void Linear::initNetParams(OptimizerInfo *info, shape4 inShape) {
-        INPUT_SIZE = inShape.size;
-        X = Parameter::declare(INPUT_SIZE, 1);
-        Y = Parameter::create(OUTPUT_SIZE, 1);
+        INPUT_SIZE = inShape.size/inShape.n;
+        X = Parameter::declare(inShape.n , 1, INPUT_SIZE, 1);
+        Y = Parameter::create(inShape.n, 1, OUTPUT_SIZE, 1);
         weights = new NetParam(info, OUTPUT_SIZE, INPUT_SIZE);
         biases = new NetParam(info, OUTPUT_SIZE, 1);
     }
@@ -16,7 +16,7 @@ namespace seann {
     // a[l] = w[l] * a[l-1] + b[l]
     void Linear::forward() {
         sgemm(weights->data(), X->a, Y->a);
-        Y->a = *Y->a + biases->data();
+        paraAdd(Y->a, biases->data());
     }
 
     void Linear::paramGrads() {

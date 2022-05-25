@@ -8,14 +8,19 @@ using namespace seblas;
 using namespace seann;
 
 int main(int argc, char** argv) {
+/*
     auto* model = new Sequential(shape4(3,32,32),{
          new Conv2D(shape4(32,3,3,3), 1,1,1,1, false),
+         new ReLU(),
+         new Conv2D(shape4(32,32,3,3), 1,1,1,1, false),
          new ReLU(),
          new Conv2D(shape4(32,32,3,3), 1,1,1,1, false),
          new ReLU(),
          new MaxPool2D(2,2),
 
          new Conv2D(shape4(64,32,3,3), 1,1,1,1, false),
+         new ReLU(),
+         new Conv2D(shape4(64,64,3,3), 1,1,1,1, false),
          new ReLU(),
          new Conv2D(shape4(64,64,3,3), 1,1,1,1, false),
          new ReLU(),
@@ -27,7 +32,7 @@ int main(int argc, char** argv) {
          new Softmax()
     });
 
-    OptimizerInfo* info = new OPTIMIZER_MOMENTUM(0.003);
+    OptimizerInfo* info = new OPTIMIZER_MOMENTUM(0.002);
 
     model->construct(info);
     model->randInit();
@@ -44,5 +49,15 @@ int main(int argc, char** argv) {
     //inspect(dataset->dataset[5000]->label);
 
     model->train(dataset);
+    */
 
+    auto* X = Tensor::declare(10,3,12,12)->create()->randNormal(7,1);
+    auto* Y = Tensor::declare(10,3,12,12)->create();
+    auto* beta = Tensor::declare(3,12,12)->create();
+    auto* gamma = Tensor::declare(3,12,12)->create()->constFill(1);
+    auto* mean = Tensor::declare(3,12,12)->create();
+    auto* var = Tensor::declare(3,12,12)->create();
+
+    batchNorm(X, beta, gamma, mean, var, Y);
+    inspect(Y);
 }
