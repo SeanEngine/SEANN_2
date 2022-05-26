@@ -170,6 +170,73 @@ namespace seblas {
         toFloat4R(var->elements[idx]) = toFloat4R(varVal[0]);
     }
 
+    template<const uint32 BLOCK, const uint32 MAX_PARALLEL>
+    __global__ void batchNormGradD(Tensor* dY, Tensor* gamma,
+                                   Tensor* mean, Tensor* var, Tensor* X, Tensor* dX){
+        const uint32 idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if(idx >= dY->dims.size /dY->dims.n ) return;
+
+        __shared__ float xs[BLOCK * MAX_PARALLEL];
+
+        float meanVal = mean->elements[idx];
+        float varVal = var->elements[idx];
+        float dVar = 0;
+        float dMean = 0;
+        float temp = 0;   // A part of dMean
+
+        //calculate dX
+        #pragma unroll
+        for(uint32 depth = 0; depth < dY->dims.n; depth++){
+            float xVal = X->elements[depth * (X->dims.size/X->dims.n) + idx];
+            xs[depth * BLOCK + threadIdx.x] = xVal;
+            float gammaVal = gamma->elements[idx];
+
+            //calculate dXHat
+            float dxHat = dY->elements[depth * (dY->dims.size/dY->dims.n) + idx] * gammaVal;
+            dVar += dxHat * (xVal - meanVal) * -0.5f * pow(varVal + 1e-8f, -3.0f/2.0f);
+            dMean += dxHat * -1.0f / sqrt(varVal + 1e-8f);
+            temp += -2.0f * (xVal - meanVal);
+        }
+
+        //calculate dMean
+        dMean += dVar * temp / (float)dY->dims.n;
+
+        //calculate dX
+        #pragma unroll
+        for(uint32 depth = 0; depth < dY->dims.n; depth++){
+            float xVal = xs[depth * BLOCK + threadIdx.x];
+            float dy = dY->elements[depth * (dY->dims.size/dY->dims.n) + idx];
+            float gammaVal = gamma->elements[idx];
+            float dXHat = dy * gammaVal;
+            dX->elements[depth * (dX->dims.size/dX->dims.n) + idx] = dXHat / sqrt(varVal + 1e-8f)
+                    + dVar * (xVal - meanVal) * 2.0f / (float)dY->dims.n + dMean / (float)dY->dims.n;
+        }
+    }
+
+    __global__ void batchNormParamGradsD(Tensor* dY, Tensor* dGamma, Tensor* dBeta,
+                                         Tensor* Y, Tensor* beta, Tensor* gamma){
+        const uint32 idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+        float dBetaVal = 0;
+        float dGammaVal = 0;
+
+        #pragma unroll
+        for(uint32 depth = 0; depth < dY->dims.n; depth++){
+            float dy = dY->elements[depth * (dY->dims.size/dY->dims.n) + idx];
+            float yVal = Y->elements[depth * (Y->dims.size/Y->dims.n) + idx];
+            float betaVal = beta->elements[idx];
+            float gammaVal = gamma->elements[idx];
+
+            float xHat = gammaVal == 0 ? 0 : (yVal - betaVal) / (gammaVal);
+
+            dBetaVal += dy;
+            dGammaVal += dy * xHat;
+        }
+
+        dBeta->elements[idx] = dBetaVal;
+        dGamma->elements[idx] = dGammaVal;
+    }
+
     Tensor* paraAdd(Tensor *A, Tensor *B, Tensor *C) {
         assert(A->dims.size == C->dims.size);
         assert(B->dims.size == C->dims.size / C->dims.n);
