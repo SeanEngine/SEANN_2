@@ -12,10 +12,10 @@ namespace seann {
     public:
         NetParam* weights{};
         NetParam* biases{};
-        uint32 INPUT_SIZE;
+        uint32 INPUT_SIZE{};
         uint32 OUTPUT_SIZE;
 
-        Linear(uint32 OUTPUT_SIZE){
+        explicit Linear(uint32 OUTPUT_SIZE){
             this->OUTPUT_SIZE = OUTPUT_SIZE;
         }
 

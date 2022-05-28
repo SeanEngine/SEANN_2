@@ -36,6 +36,7 @@ namespace seann {
             if (WITH_BIAS) bias = new NetParam(info, filterShape.n, 1);
             X = Parameter::declare(inShape); //input features
             shape4 outShape = {
+                    X->a->dims.n,
                     filterShape.n,
                     (inShape.h + 2 * padH - filterShape.h) / strideH + 1,
                     (inShape.w + 2 * padW - filterShape.w) / strideW + 1};

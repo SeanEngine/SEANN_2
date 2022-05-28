@@ -5,19 +5,19 @@
 
 namespace seann{
 
-    __global__ void crossEntropyPrepare(Parameter* Y, Tensor* label, Tensor* buf){
+    __global__ void crossEntropyPrepare(Parameter* Y, Tensor* labels){
         uint32 idx = threadIdx.x + blockIdx.x * blockDim.x;
-        if(idx < Y->a->dims.size){
-            float s = Y->a->elements[idx];
-            buf->elements[idx] = label->elements[idx] * (-log(s + 1e-10f));
+        if(idx < Y->a->dims.size ){
+            float labelVal = labels->elements[idx];
+            labels->elements[idx] = -log(Y->a->elements[idx] + 1e-10f) * labelVal;
         }
     }
 
-    float crossEntropyCalc(Parameter* Y, Tensor* label, Tensor* buf){
+    float crossEntropyCalc(Parameter* Y, Tensor* buf){
         uint32 block = CUDA_BLOCK_SIZE.y * CUDA_BLOCK_SIZE.x;
-        uint32 grid = (label->dims.size + block - 1) / block;
+        uint32 grid = (buf->dims.size + block - 1) / block;
 
-        crossEntropyPrepare<<<grid, block>>>(Y, label, buf);
+        crossEntropyPrepare<<<grid, block>>>(Y, buf);
         cudaDeviceSynchronize();
         assertCuda(__FILE__, __LINE__);
 
@@ -26,10 +26,8 @@ namespace seann{
         return out;
     }
 
-    void crossEntropyLoss(Parameter* Y, Tensor* label){
+    void crossEntropyLoss(Parameter* Y, Tensor* labels){
         Y->a->copyToD2D(Y->grad);
-        *Y->grad - label;
+        *Y->grad - labels;
     }
-
-
 }

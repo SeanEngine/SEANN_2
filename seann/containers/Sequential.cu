@@ -32,6 +32,26 @@ namespace seann {
         waive();
     }
 
+    void fillData(Parameter* netX, Data** data, uint32 beg){
+        for(int i = 0; i < netX->a->dims.n; i++){
+            cudaMemcpy(netX->a->elements + (netX->a->dims.size / netX->a->dims.n) * i,
+                       data[beg + i]->X->elements,
+                       netX->a->dims.size / netX->a->dims.n * sizeof(float),
+                       cudaMemcpyDeviceToDevice);
+        }
+        assertCuda(__FILE__, __LINE__);
+    }
+
+    void fillLabel(Tensor* labels, Data** data, uint32 beg){
+        for(int i = 0; i < labels->dims.n; i++){
+            cudaMemcpy(labels->elements + (labels->dims.size / labels->dims.n) * i,
+                       data[beg + i]->label->elements,
+                       labels->dims.size / labels->dims.n * sizeof(float),
+                       cudaMemcpyDeviceToDevice);
+        }
+        assertCuda(__FILE__, __LINE__);
+    }
+
     Tensor* Sequential::forward() const {
         for (int i = 0; i < OPERAND_COUNT; i++) {
             operands[i]->forward();
@@ -81,20 +101,28 @@ namespace seann {
 
     //this train method does not support BN
     void Sequential::train(Dataset *data) const {
+        assert(data->BATCH_SIZE > 0 && data->BATCH_SIZE % netX->a->dims.n == 0);
         data->genBatch();
-        auto* inspection = Tensor::declare(data->labelShape)->createHost();
+        auto* labels = Tensor::declare(netY->a->dims)->create();
         while(data->epochID < data->MAX_EPOCH){
             uint32 batchID = data->batchID-1;
             auto pass = data->genBatchAsync();
             float batchLoss = 0;
 
             //training over each sample in the batch
-            for(uint32 sampleID = 0; sampleID < data->BATCH_SIZE; sampleID++){
-                forward(data->dataBatch[batchID%2][sampleID]->X);
-                float lossVal = lossFW(netY, data->dataBatch[batchID%2][sampleID]->label, inspection);
+            for(uint32 sampleID = 0; sampleID < data->BATCH_SIZE; sampleID+= netX->a->dims.n){
+                fillData(netX, data->dataBatch[batchID % 2], sampleID);
+                forward();
+                fillLabel(labels, data->dataBatch[batchID % 2], sampleID);
+                backward(labels);
+
+               // inspect(operands[13]->Y->grad);
+
+                float lossVal = lossFW(netY, labels);
                 batchLoss += lossVal;
-                backward(data->dataBatch[batchID%2][sampleID]->label);
                 learn();
+
+               // assert(false);
             }
 
             if(data->batchID % 5 == 0) {

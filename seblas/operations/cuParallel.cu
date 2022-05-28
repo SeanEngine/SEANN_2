@@ -46,6 +46,79 @@ namespace seblas {
         }
     }
 
+    __global__ void paraSubD(Tensor* A, Tensor* B, Tensor* C){
+        const uint32 idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if(idx >= A->dims.size / A->dims.n ) return;
+
+        float bVal = B->elements[idx];
+        uint32 offset = (A->dims.size/A->dims.n);
+        //subtract elements in B from every sample in A
+        #pragma unroll
+        for(uint32 n = 0; n < A->dims.n ; n++){
+            float aVal = A->elements[n * offset + idx];
+            C->elements[n * offset + idx] = aVal - bVal;
+        }
+    }
+
+    __global__ void paraSub4D(Tensor* A, Tensor* B, Tensor* C){
+        const uint32 idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+        if(idx >= A->dims.size / A->dims.n ) return;
+
+        float bVals[4] = {0};
+        float aVals[4] = {0};
+        float cVals[4] = {0};
+        toFloat4R(bVals[0]) = toFloat4R(B->elements[idx]);
+        //subtract elements in B from every sample in A
+        #pragma unroll
+        for(uint32 n = 0; n < A->dims.n ; n++){
+            toFloat4R(aVals[0]) = toFloat4R(A->elements[n * (A->dims.size/A->dims.n) + idx]);
+            cVals[0] = aVals[0] - bVals[0];
+            cVals[1] = aVals[1] - bVals[1];
+            cVals[2] = aVals[2] - bVals[2];
+            cVals[3] = aVals[3] - bVals[3];
+            toFloat4R(C->elements[n * (A->dims.size/A->dims.n) + idx]) = toFloat4R(cVals[0]);
+            cVals[0] = 0;
+            cVals[1] = 0;
+            cVals[2] = 0;
+            cVals[3] = 0;
+        }
+    }
+
+    __global__ void paraCumulateD(Tensor* A, Tensor* B, Tensor* C){
+        const uint32 idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if(idx >= A->dims.size / A->dims.n ) return;
+
+        float aVal = A->elements[idx];
+        float cVal = aVal;
+        uint32 offset = (A->dims.size/A->dims.n);
+        //add elements in B to every sample in A
+        #pragma unroll
+        for(uint32 n = 0; n < B->dims.n ; n++){
+            float bVal = B->elements[n * offset + idx];
+            cVal += bVal;
+        }
+        C->elements[idx] = cVal;
+    }
+
+    __global__ void paraCumulate4D(Tensor* A, Tensor* B, Tensor* C){
+        const uint32 idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+        if(idx >= A->dims.size / A->dims.n ) return;
+
+        float cVals[4] = {0};
+        float bVals[4] = {0};
+        toFloat4R(cVals[0]) = toFloat4R(A->elements[idx]);
+        //add elements in B to every sample in A
+        #pragma unroll
+        for(uint32 n = 0; n < B->dims.n ; n++){
+            toFloat4R(bVals[0]) = toFloat4R(B->elements[n * (A->dims.size/A->dims.n) + idx]);
+            cVals[0] += bVals[0];
+            cVals[1] += bVals[1];
+            cVals[2] += bVals[2];
+            cVals[3] += bVals[3];
+        }
+        toFloat4R(C->elements[idx]) = toFloat4R(cVals[0]);
+    }
+
     template<const uint32 BLOCK, const uint32 MAX_PARALLEL>
     __global__ void batchNormD(Tensor* X, Tensor* beta, Tensor* gamma,
                                Tensor* mean, Tensor* var, Tensor* Y){
@@ -260,6 +333,29 @@ namespace seblas {
         return paraAdd(A, B, A);
     }
 
+    Tensor* paraSub(Tensor* A, Tensor* B, Tensor* C){
+        assert(A->dims.size == C->dims.size);
+        assert(B->dims.size == C->dims.size / C->dims.n);
+
+        uint32 block = CUDA_BLOCK_SIZE.x * CUDA_BLOCK_SIZE.y;
+        uint32 grid = ((A->dims.size / A->dims.n) + block - 1) / block;
+        if((A->dims.size / A->dims.n) % 4 == 0) {
+            grid = ((A->dims.size / A->dims.n) + block * 4 - 1) / (block * 4);
+            paraSub4D<<<grid, block>>>(A, B, C);
+            cudaDeviceSynchronize();
+            assertCuda(__FILE__, __LINE__);
+            return C;
+        }
+        paraSubD<<<grid, block>>>(A, B, C);
+        cudaDeviceSynchronize();
+        assertCuda(__FILE__, __LINE__);
+        return C;
+    }
+
+    Tensor* paraSub(Tensor* A, Tensor* B){
+        return paraSub(A, B, A);
+    }
+
     Tensor* batchNorm(Tensor* X, Tensor* beta, Tensor* gamma,
                       Tensor* mean, Tensor* var, Tensor* Y){
         assert(X->dims.n == Y->dims.n);
@@ -282,5 +378,53 @@ namespace seblas {
         cudaDeviceSynchronize();
         assertCuda(__FILE__, __LINE__);
         return Y;
+    }
+
+    Tensor* batchNormGrad(Tensor* dY, Tensor* gamma,
+                          Tensor* mean, Tensor* var, Tensor* X, Tensor* dX){
+        assert(dY->dims.n == X->dims.n);
+        assert(dY->dims.size == X->dims.size);
+
+        uint32 block = BATCH_NORM_BLOCK;
+        uint32 grid = ((X->dims.size / X->dims.n) + block - 1) / block;
+
+        batchNormGradD<BATCH_NORM_BLOCK, BATCH_NORM_MAX_PARALLEL><<<grid, block>>>(dY, gamma, mean,var, X, dX);
+        cudaDeviceSynchronize();
+        assertCuda(__FILE__, __LINE__);
+        return dX;
+    }
+
+    void batchNormParamGrads(Tensor* dY, Tensor* dGamma, Tensor* dBeta,
+                                Tensor* Y, Tensor* beta, Tensor* gamma){
+        assert(dY->dims.n == Y->dims.n);
+        assert(dY->dims.size == Y->dims.size);
+
+        uint32 block = BATCH_NORM_BLOCK;
+        uint32 grid = ((Y->dims.size / Y->dims.n) + block - 1) / block;
+
+        batchNormParamGradsD<<<grid, block>>>(dY, dGamma, dBeta, Y, beta, gamma);
+        cudaDeviceSynchronize();
+        assertCuda(__FILE__, __LINE__);
+    }
+
+    Tensor* paraCumulate(Tensor* A, Tensor* B, Tensor* C){
+        uint32 block = CUDA_BLOCK_SIZE.x * CUDA_BLOCK_SIZE.y;
+        uint32 grid = ((A->dims.size / A->dims.n) + block - 1) / block;
+
+        if((A->dims.size / A->dims.n) % 4 == 0) {
+            grid = ((A->dims.size / A->dims.n) + block * 4 - 1) / (block * 4);
+            paraCumulate4D<<<grid, block>>>(A, B, C);
+            cudaDeviceSynchronize();
+            assertCuda(__FILE__, __LINE__);
+            return C;
+        }
+        paraCumulateD<<<grid, block>>>(A, B, C);
+        cudaDeviceSynchronize();
+        assertCuda(__FILE__, __LINE__);
+        return C;
+    }
+
+    Tensor* paraCumulate(Tensor* A, Tensor* B){
+        return paraCumulate(A, B, A);
     }
 } // seblaws

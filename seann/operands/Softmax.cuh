@@ -19,9 +19,9 @@ namespace seann {
         }
 
         void initNetParams(OptimizerInfo *info, shape4 inShape) override{
-            INPUT_SIZE = inShape.size;
-            X = Parameter::declare(INPUT_SIZE, 1);
-            Y = Parameter::create(INPUT_SIZE, 1);
+            INPUT_SIZE = inShape.size / inShape.n;
+            X = Parameter::declare(inShape.n, 1, INPUT_SIZE, 1);
+            Y = Parameter::create(inShape.n, 1, INPUT_SIZE, 1);
             reduceBuffer = INPUT_SIZE / 1024 > 0 ? Tensor::declare(INPUT_SIZE,1)->create() : nullptr;
         }
 

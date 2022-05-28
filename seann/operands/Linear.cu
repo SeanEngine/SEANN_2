@@ -23,7 +23,7 @@ namespace seann {
         // ∂w = error * a^T
         sgemmNTA(Y->grad, X->a, weights->A->grad);
         // ∂b = error
-        *biases->A->grad + Y->grad;
+        paraCumulate(biases->grad(), Y->grad);
     }
 
     void Linear::updateParams() {

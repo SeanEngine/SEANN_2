@@ -480,7 +480,6 @@ namespace seblas{
             const int REGIS_M, const int REGIS_N>
     __global__ void gemmImplicitError(Tensor* A, Tensor* B, Tensor* C, int strideH, int strideW, int padH, int padW){
 
-        // MatA: OC, IC * FH * FW; MatB: IC * FH * FW, OH * OW; Mat C: OC, OH * OW
         ///insert parameters
         const uint32 M = A->dims.c;
         const uint32 K = A->dims.h * A->dims.w;
@@ -536,7 +535,6 @@ namespace seblas{
         //loop over the nth dimension in case of using batch norm
         #pragma unroll
         for(int nDim = 0; nDim < A->dims.n; nDim++) {
-
             #pragma unroll
             for (int i = 0; i < BLOCK_M; i += readRowStrideA) {
                 if (blockM + readRowA + i < M && readColA < K) {
@@ -685,7 +683,7 @@ namespace seblas{
             for(int rn = 0; rn < REGIS_N; rn ++){
                 if((blockM + threadIdx.y * REGIS_M + rm < M && blockN + threadIdx.x * REGIS_N + rn < N)) {
                     C->elements[(blockM + threadIdx.y * REGIS_M + rm) * N
-                                + (blockN + threadIdx.x * REGIS_N + rn)] += regisC[rm][rn] / A->dims.n;
+                                + (blockN + threadIdx.x * REGIS_N + rn)] += regisC[rm][rn] /*/ A->dims.n*/;
                 }
             }
         }
