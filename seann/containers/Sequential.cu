@@ -116,13 +116,9 @@ namespace seann {
                 fillLabel(labels, data->dataBatch[batchID % 2], sampleID);
                 backward(labels);
 
-               // inspect(operands[13]->Y->grad);
-
                 float lossVal = lossFW(netY, labels);
                 batchLoss += lossVal;
                 learn();
-
-               // assert(false);
             }
 
             if(data->batchID % 5 == 0) {

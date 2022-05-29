@@ -155,7 +155,7 @@ namespace seblas {
     }
 
     __global__ void hadamardProductD(Tensor* in, Tensor* other){
-        uint32 index = threadIdx.y + blockIdx.y * blockDim.y;
+        uint32 index = threadIdx.x + blockIdx.x * blockDim.x;
         if(index < in->dims.size){
             in->elements[index] *= other->elements[index];
         }
