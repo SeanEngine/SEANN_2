@@ -9,7 +9,7 @@ using namespace seann;
 
 int main(int argc, char** argv) {
 
-    auto* model = new Sequential(shape4(1, 3,32,32),{
+    auto* model = new Sequential(shape4(20, 3,32,32),{
          new Conv2D(shape4(32,3,3,3), 1,1,1,1, false),
          new ReLU(),
          new Conv2D(shape4(32,32,3,3), 1,1,1,1, false),
@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
          new Softmax()
     });
 
-    OptimizerInfo* info = new OPTIMIZER_MOMENTUM(0.003);
+    OptimizerInfo* info = new OPTIMIZER_MOMENTUM(0.001);
 
     model->construct(info);
     model->randInit();

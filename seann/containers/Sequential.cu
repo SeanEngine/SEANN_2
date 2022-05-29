@@ -120,7 +120,7 @@ namespace seann {
                 batchLoss += lossVal;
                 learn();
 
-                //assert(false);
+
             }
 
             if(data->batchID % 5 == 0) {
