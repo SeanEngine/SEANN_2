@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
          new ReLU(),
          new MaxPool2D(2,2),
 
-         new Linear(124),
+         new Linear(120),
          new ReLU(),
          new Linear(10),
          new Softmax()

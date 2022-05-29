@@ -139,17 +139,17 @@ namespace seblas {
     }
 
     __global__ void subtract4D(Tensor* A, Tensor* B){
-        uint32 index = (threadIdx.x + blockIdx.x * blockDim.x )* 4;
+        uint32 index = (threadIdx.x + blockIdx.x * blockDim.x) * 4;
         float regisA[4];
         float regisB[4];
         float regisC[4] = {0};
         if(index < A->dims.size){
             toFloat4R(regisA[0]) = toFloat4R(A->elements[index]);
             toFloat4R(regisB[0]) = toFloat4R(B->elements[index]);
-            #pragma unroll
-            for (int i = 0; i < 4; i++){
-                regisC[i] = regisA[i] - regisB[i];
-            }
+            regisC[0] = regisA[0] - regisB[0];
+            regisC[1] = regisA[1] - regisB[1];
+            regisC[2] = regisA[2] - regisB[2];
+            regisC[3] = regisA[3] - regisB[3];
             toFloat4R(A->elements[index]) = toFloat4R(regisC[0]);
         }
     }
@@ -169,10 +169,10 @@ namespace seblas {
         if(index < in->dims.size){
             toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
             toFloat4R(regisB[0]) = toFloat4R(other->elements[index]);
-            #pragma unroll
-            for (int i = 0; i < 4; i++){
-                regisC[i] = regisA[i] * regisB[i];
-            }
+            regisC[0] = regisA[0] * regisB[0];
+            regisC[1] = regisA[1] * regisB[1];
+            regisC[2] = regisA[2] * regisB[2];
+            regisC[3] = regisA[3] * regisB[3];
             toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
         }
     }
@@ -192,10 +192,10 @@ namespace seblas {
         if(index < in->dims.size){
             toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
             toFloat4R(regisB[0]) = toFloat4R(other->elements[index]);
-            #pragma unroll
-            for (int i = 0; i < 4; i++){
-                regisC[i] = regisA[i] / regisB[i];
-            }
+            regisC[0] = regisA[0] / regisB[0];
+            regisC[1] = regisA[1] / regisB[1];
+            regisC[2] = regisA[2] / regisB[2];
+            regisC[3] = regisA[3] / regisB[3];
             toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
         }
     }
@@ -213,10 +213,10 @@ namespace seblas {
         float regisC[4] = {0};
         if(index < in->dims.size){
             toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
-            #pragma unroll
-            for (int i = 0; i < 4; i++){
-                regisC[i] = regisA[i] + scalar;
-            }
+            regisC[0] = regisA[0] + scalar;
+            regisC[1] = regisA[1] + scalar;
+            regisC[2] = regisA[2] + scalar;
+            regisC[3] = regisA[3] + scalar;
             toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
         }
     }
@@ -234,10 +234,10 @@ namespace seblas {
         float regisC[4] = {0};
         if(index < in->dims.size){
             toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
-            #pragma unroll
-            for (int i = 0; i < 4; i++){
-                regisC[i] = regisA[i] - scalar;
-            }
+            regisC[0] = regisA[0] - scalar;
+            regisC[1] = regisA[1] - scalar;
+            regisC[2] = regisA[2] - scalar;
+            regisC[3] = regisA[3] - scalar;
             toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
         }
     }
@@ -255,10 +255,10 @@ namespace seblas {
         float regisC[4] = {0};
         if(index < in->dims.size){
             toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
-            #pragma unroll
-            for (int i = 0; i < 4; i++){
-                regisC[i] = regisA[i] * scalar;
-            }
+            regisC[0] = regisA[0] * scalar;
+            regisC[1] = regisA[1] * scalar;
+            regisC[2] = regisA[2] * scalar;
+            regisC[3] = regisA[3] * scalar;
             toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
         }
     }
@@ -276,10 +276,10 @@ namespace seblas {
         float regisC[4] = {0};
         if(index < in->dims.size){
             toFloat4R(regisA[0]) = toFloat4R(in->elements[index]);
-            #pragma unroll
-            for (int i = 0; i < 4; i++){
-                regisC[i] = regisA[i] / scalar;
-            }
+            regisC[0] = regisA[0] / scalar;
+            regisC[1] = regisA[1] / scalar;
+            regisC[2] = regisA[2] / scalar;
+            regisC[3] = regisA[3] / scalar;
             toFloat4R(in->elements[index]) = toFloat4R(regisC[0]);
         }
     }

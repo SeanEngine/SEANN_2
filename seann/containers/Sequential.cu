@@ -119,6 +119,8 @@ namespace seann {
                 float lossVal = lossFW(netY, labels);
                 batchLoss += lossVal;
                 learn();
+
+                //assert(false);
             }
 
             if(data->batchID % 5 == 0) {
